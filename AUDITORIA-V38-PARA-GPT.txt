@@ -1,0 +1,137 @@
+# ATLOS V38 — AUDITORÍA COMPLETA PARA ANALIZAR EN CHATGPT
+Fecha: 2026-09-15. Carpeta: C:\Users\Usuario\Desktop\ATLOS-WEB. Alcance: solo lectura, sin modificar codigo, sin instalar deps, sin migrar.
+Objetivo: saber estado real de ATLOS V38 antes de agregar funcionalidades.
+
+## 0. RESUMEN EJECUTIVO
+ATLOS V38 es frontend-only Vite + React 19 PWA version 38.0.0. No hay backend ni DB en repo. Habla con API externa https://atlos-api-production.up.railway.app con fallback hardcodeado en src/services/api.js:3. Tiene modo offline con IndexedDB + localStorage + cola atlos-queue + sync cada 60s.
+Funciona como MVP demo pero pende de un hilo: App.jsx god-component de 329 lineas orquesta 10 vistas, 9 llamadas paralelas por refresh(), doble fuente de verdad localStorage+IndexedDB, auth JWT en localStorage, validacion solo frontend, config Vercel dudosa, sin tests/lint/TS/CI.
+Conclusion: estable para demo, NO estable para escalar features sin estabilizar FASE 1-3.
+
+## 1. ESTRUCTURA DEL PROYECTO
+src/App.jsx: estado global, nav, refresh, CRUD alumno/pago/asistencia/clase/profesor/usuario, auth, licencia, notifs, modales.
+src/main.jsx: entry React + registerSW immediate + styles.css.
+src/styles.css: monolítico, variables CSS, grids fijos 220px sidebar, cards repeat(4,1fr), tablas min-width 720px, sin media queries observadas.
+src/assets/logo.png
+src/components/: ui.jsx (PanelTitle,Badge,Empty), Modal.jsx (sin focus-trap/Esc/aria), Login.jsx, GymGate.jsx (HWID), forms.jsx (Student,Payment,Routine,Clase,Profesor,Usuario), FormaEditor.jsx 177 lineas (rutinas A/B, biblioteca, PDF).
+src/pages/: VistaInicio.jsx, VistaGestion.jsx, VistaReportes.jsx (recharts), VistaPlanificacion.jsx (alumnos CRUD + detalle + whatsapp), VistaAsistencia.jsx (torniquete DNI), VistaClases.jsx, VistaPlanes.jsx (tabs alumnos/ejercicios + biblioteca local), VistaProfesores.jsx, VistaPersonal.jsx (mock), VistaLicencias.jsx (multi-gym + ventas).
+src/services/: api.js 159 lineas (fetch + token + X-HWID + esErrorDeRed + flushQueue), db.js 118 (IndexedDB atlos-db v2 stores students,payments,attendance,routines,clases,inscripciones,profesores,library,meta + normalizeKeys + seed demo), sync.js 204 (sanitizeQueue, mirrorLocalStorageToIdb, pullAll, verify, start/stopSync 60s).
+src/hooks/: useClock (usado), useOnline (muerto, nunca importado).
+src/utils/: helpers.js (money,today,fmtHoy,parseFecha,toISO,toDisplay,isSameMonth,genGymCode,isUUID,safeId), pdf.js (jspdf+autotable generarPDFRutina).
+public/: icon.svg, icon-192.png, icon-512.png
+raiz: package.json, vite.config.js (VitePWA navigateFallback /index.html), vercel.json (services/frontend dudoso), index.html, README.md obsoleto ("Next.js + FastAPI" cuando es Vite+React), refactor-split.cjs 319 lineas (script historico split, refiere VistaMiGym.jsx inexistente, no ejecutar), Abrir-Opencode-ATLOS.cmd, install.log (403 packages, 0 vuln, glob deprecated, core-js postinstall), dist/ commiteado (sw.js, workbox, assets pdf/html2canvas), .env.local existe gitignored (no leer secretos, solo se sabe que VITE_API_URL es unica var usada), .gitignore solo .vercel y .env*, node_modules presente.
+Sin backend, sin tests, sin lint, sin TS, sin CI, sin .env.example.
+
+## 2. DEPENDENCIAS package.json
+name atlos-web-v1, version 38.0.0, type module, scripts dev/build/preview vite.
+deps: @vitejs/plugin-react ^6.1.1 (deberia ser dev), jspdf ^4.2.1, jspdf-autotable ^5.0.8, react ^19.2.8, react-dom ^19.2.8, recharts ^3.10.1, vite ^8.2.2 (deberia ser dev), vite-plugin-pwa ^1.3.0.
+Riesgos: React19+Vite8 bleeding edge sin tests, plugin-react en deps infla prod, sin devDeps, sin lock auditado aqui, bundle pesado jspdf+recharts sin code-split, 106 funding packages. NO actualizar ahora.
+
+## 3. FUNCIONALIDADES Y ESTADO
+Login /auth/login + /auth/me: FUNCIONA PERO RIESGOS, ALTO. Token localStorage, atob sin validar, falla con token opaco, sin refresh.
+GymGate HWID + X-HWID: FUNCIONA PERO RIESGOS, ALTO. Generar/Copiar arbitrario en cliente, gate solo cliente bypasseable.
+Licencias check/renovar/bloquear/listar: FUNCIONA PERO RIESGOS, ALTO. Doble polling 5min App+VistaLicencias, bloqueo solo frontend no-Dueño.
+Ventas multi-gym: FUNCIONA PERO RIESGOS, MEDIO. Dedup hwid, MRR estimado, sin paginar.
+Alumnos CRUD: FUNCIONA PERO RIESGOS, CRITICO. Dedup nombre+DNI O(n2), listas deleted-* nunca purgadas, extMap fuera nube, borrado nube solo ID numerico.
+Pagos CRUD: FUNCIONA PERO RIESGOS, CRITICO. Alta fuerza Efectivo, edicion crea+borra sin PUT, totalMes suma todo no filtra mes.
+Asistencia torniquete: FUNCIONA PERO RIESGOS, ALTO. Busca dni/phone/nombre colisiona, Number(uuid)=NaN parcheado.
+Clases CRUD+inscribir: FUNCIONA PERO RIESGOS, ALTO. inscriptos nube+local doble conteo, inscribir Number(alumnoId) NaN con UUID.
+Profesores CRUD: FUNCIONA PERO RIESGOS, MEDIO. Merge nombre|apellido colapsa homonimos, cola guarda solo _localId pierde datos.
+Rutinas FormaEditor: FUNCIONA PERO RIESGOS, ALTO. student_id Number||string fragil, IDs baseId#n, location.reload(), mode ignorado.
+Biblioteca ejercicios: INCOMPLETA, MEDIO. Solo localStorage sin POST nube.
+Reportes recharts: FUNCIONA, BAJO.
+Inicio/notifs: FUNCIONA, BAJO. useClock 1s re-render, console.log residual.
+PDF: FUNCIONA PERO RIESGOS, MEDIO. Import dinamico OK, nombre sin sanitizar.
+Whatsapp: INCOMPLETA, MEDIO. whatsapp:// falla desktop, usar https://wa.me/, 7 botones duplicados, fallback 10/09 hardcodeado.
+Personal/Usuarios: ROTA, ALTO. catch a mock local admin/Dueño, eliminar por prompt ID.
+Gym config: INCOMPLETA, BAJO. gymConf seteado nunca renderizado.
+Sync offline flushQueue: FUNCIONA PERO RIESGOS, CRITICO. catch null oculta errores, re-encola infinito, sanitize descarta null/NaN = perdida datos.
+PWA: FUNCIONA, BAJO.
+cuotas, checkout, backup, syncVersion, dashboard, claseAlumnos detalle: NO IMPLEMENTADA o sin UI aunque definidos en api.js.
+
+## 4. ERRORES CONCRETOS
+vercel.json services/frontend + rewrites type:service no estandar, riesgo 404 SPA. Deberia ser rewrites a /index.html.
+.gitignore solo .vercel/.env*, falta node_modules/dist -> repo gigante.
+README falso Next.js.
+vite y plugin-react en dependencies no devDependencies.
+purgeDemo typo 'martín día' vs 'martín díaz' en App.jsx:148, demo nunca purgada prod.
+handleDeleteAlumno App.jsx:241 muerto, borrado real en VistaPlanificacion.
+gymConf nunca leido.
+useOnline muerto.
+alumnosConRutina VistaPlanes:19 muerto.
+money importado no usado en VistaPlanificacion.
+savePayment hardcodea Efectivo vs edicion permite otros.
+VistaGestion totalMes suma todo.
+VistaAsistencia firma no declara attendance/query/setQuery pero App los pasa.
+VistaPlanes ignora onNew/refresh pasados, usa reload.
+inscribirClase Number(alumnoId) NaN con UUID.
+FormaEditor Number(student.id)||id fragil.
+logged = session && isTokenValid() falla con token opaco -> logout infinito.
+try catch vacio en merge inscripciones.
+seed solo DEV vs purge solo PROD divergen.
+refactor-split refiere VistaMiGym inexistente.
+styles sin responsive, tablas overflow movil.
+Modal sin accesibilidad.
+dist commiteado.
+
+## 5. POSIBLES ERRORES LATENTES
+refresh 9x catch null -> UI vacia sin error si Railway cae.
+Carrera refresh vs pullAll vs flushQueue 60s+visibility+online -> resucita borrados.
+Quota localStorage 5MB -> queuePush catch pierde altas.
+normalizeKeys una sola vez, crash deja 123 y "123" duplicados.
+checkLicencia con HWID null -> "null" 404.
+NuevaLicenciaForm sin verificacion rol -> empleado crea gyms si backend abierto.
+Bundle eager 10 vistas+recharts+jspdf -> TTI alto.
+notifs O(n*m log m) con 1k alumnos jank.
+whatsapp:// bloqueado popup, 549 duplicado.
+Zona horaria desplaza vencimiento 30d +-1.
+
+## 6. FRONTEND
+Navegacion por estado page en App, navBase filtra personal/reportes para Empleado, licencias solo admin Dueño/Admin. Botones EDITAR/ELIMINAR dependen de seleccion sel, alert si nada. Formularios con FormData + onEnterNext, validacion basica alert. Modales overlay click-outside, sin Esc. Tablas con grid inline, seleccion highlight, doble-click edita. Estados loading solo en Login/GymGate/Licencias, resto sin skeleton. Errores con alert/console, sin toast. Vacio con Empty OK. Responsive roto, accesibilidad pobre, datos vacios OK pero WhatsApp sin telefono solo alert.
+
+## 7. BACKEND (externo, no en repo)
+Endpoints usados: /auth/login, /auth/me, /alumnos CRUD, /ejercicios + /lote + DELETE, /pagos + POST, /asistencia + checkin/checkout, /clases CRUD + /:id/alumnos + /inscribir, /cuotas (no usado), /dashboard, /exercises-library, /routines + /:sid/latest, /profesores CRUD, /sync/version, /backup (no usado), /licencias/check|renovar|listar|delete|bloquear|desbloquear, /gym/config, /usuarios (mock fallback).
+Validacion solo frontend, manejo errores catch null, auth Bearer JWT localStorage, autorizacion solo UI, comunicacion fetch JSON + X-HWID, env solo VITE_API_URL.
+
+## 8. BASE DE DATOS
+IndexedDB atlos-db v2, 9 stores. Relaciones por studentId string sin FK. Consultas getAll + filtro memoria. Sin migraciones versionadas salvo normalizeKeys una vez. Inconsistencias: dual localStorage+IDB divergen, extMap apellidos/dni/mail fuera nube, deleted-* listas infinitas, IDs numericos nube vs UUID local. Riesgo perdida: QuotaExceeded, sanitize descarta, normalize a mitad, bulkPut sin transaccion atomica, backup nunca llamado. NO MODIFICAR DB.
+
+## 9. SEGURIDAD
+Token localStorage XSS, sin HttpOnly, sin logout server. RBAC solo UI. Licencia solo frontend. HWID forjable sin firma. Hint default 3808 critico si backend lo usa. Sin secretos hardcodeados en src salvo API_URL publica. PII en claro sin cifrar. Eliminar usuario por prompt. Supply-chain glob deprecated. Validacion bypassable.
+
+## 10. RENDIMIENTO
+Sin lazy, todo eager. refresh trae todo sin paginar. Dedup O(n2), sorts por alumno. useClock 1s re-render total. FormaEditor re-render por tecla sin memo/debounce. CSS monolitico, assets pesados pdf/html2canvas. lastVersion reset fuerza pull completo.
+
+## 11. ESTABILIDAD POR QUE PENDE DE UN HILO
+App god-object, refresh punto unico fallo, API_URL unica, localStorage unico, HWID unico, token unico, reloads esconden stale, acoplamiento App-10vistas-api-db-localStorage: cambiar dni/phone rompe 5 archivos. Sin manejo errores critico, estados inconsistentes nube/local, logica duplicada vencimiento +30d x4, archivos grandes App 329 + sync 204 + FormaEditor 177, soluciones temporales deleted-*/extMap/sanitize, dificil mantener.
+
+## 12. DUPLICADO/OBSOLETO
+refactor-split historico no ejecutar, dist/node_modules no versionar, seed+purge+deleted parche demos, vencimiento x4, formularios alumno x3 validaciones divergentes, Whatsapp x7, useOnline x3 formas online, Empty/Table inline repetido, install.log/cmd utilitarios.
+
+## 13. INCOMPLETAS
+Biblioteca sin nube, routines vs ejercicios doble modelo conRutina mismatch, usuarios mock, cuotas/checkout/backup/claseAlumnos sin UI, gym config sin UI, FormaEditor mode ignorado, dashboard prop ignorada. Sin TODO literales pero marcadores: limpieza demo, no reseed, CORRECCION FINAL, ENDPOINT ESPERADO, mock local, Defensa bug UUID, default 3808, 10/09.
+
+## 14. REGRESIONES RIESGO
+CRITICO: refresh/dedup/merge, flushQueue/sanitize, auth/X-HWID.
+ALTO: clases inscriptos, rutinas baseId, licencia gate.
+MEDIO: pagos Efectivo, localStorage keys sin version.
+BAJO: reportes/inicio, estilos/PWA.
+
+## 15. ARQUITECTURA VEREDICTO
+Mantener carpetas, PWA, cola, helpers. Mal god-object, dual fuente, contrato implicito. No reemplazar por Next/Redux/TS ahora. Evolucion gradual: hooks useAuth/Alumnos/Pagos/Licencia/Sync, adaptador API, IDB unico, lazy, tipos JSDoc. Dejar TS/design-system/tests E2E despues.
+
+## 16. PLAN ESTABILIZACION (NO IMPLEMENTAR AUN)
+FASE1 CRITICOS: vercel fallback, gitignore, documentar VITE_API_URL, corregir Number UUID, totalMes, Diaz typo, props fantasma.
+FASE2 IMPORTANTES: RBAC backend, quitar Generar HWID publico y 3808, wa.me, flush backoff+DLQ+UI cola, quitar reload.
+FASE3 ESTABILIZACION: IDB unico, migrador con backup, purga deleted, refresh por entidad + paginar, debounce, memo, toast errores.
+FASE4 REFACTORIZACION: hooks, Table/Modal accesible, lazy charts/pdf, contratos tipados, quitar muertos.
+FASE5 MEJORAS: responsive, focus-trap Esc, roles UI, tests smoke login/alta/pago/checkin/build.
+FASE6 NUEVAS: cuotas/checkout, biblioteca nube, gym UI, reportes server, backups con flag/rollback.
+
+## PARA CHATGPT: PREGUNTAS SUGERIDAS
+1. Dado este audit, cual es el orden FASE1 minimo viable sin romper gyms en produccion?
+2. Como unificar localStorage+IndexedDB a una sola fuente con migracion segura y rollback?
+3. Como tipar contratos API nube vs local (IDs numericos vs UUID) y evitar Number(NaN)?
+4. Propon hooks useAlumnos/usePagos/useLicencia sin reescribir todo App.jsx de golpe.
+5. Que checks de seguridad pedir al backend Railway (RBAC, licencias, rate-limit, validacion server)?
+
+FIN. Pegar este archivo completo a ChatGPT para continuar.
