@@ -56,7 +56,8 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
   }
   const doInscribir=async(e)=>{
     e.preventDefault(); const f=new FormData(e.currentTarget); const alumnoId=f.get('alumno')
-    try{ await api.inscribirClase(selected.id, Number(alumnoId)) }catch(err){ console.warn('inscribir api',err.message); // local fallback: incrementar inscriptos
+    const _aSid=String(alumnoId??'').trim(); const _alumnoRef=/^\d+$/.test(_aSid)?Number(_aSid):_aSid
+    try{ await api.inscribirClase(selected.id, _alumnoRef) }catch(err){ console.warn('inscribir api',err.message); // local fallback: incrementar inscriptos
       const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const idx=local.findIndex(c=>String(c.id)===String(selected.id))
       if(idx>=0){ local[idx].inscriptos=(Number(local[idx].inscriptos)||0)+1; localStorage.setItem('atlos-clases',JSON.stringify(local)) }
       else { const cloudIdx=clases.findIndex(c=>String(c.id)===String(selected.id)); if(cloudIdx>=0){ const copy=[...clases]; copy[cloudIdx]={...copy[cloudIdx], inscriptos:(Number(copy[cloudIdx].inscriptos)||0)+1}; localStorage.setItem('atlos-clases',JSON.stringify(copy)) } }

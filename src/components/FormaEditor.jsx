@@ -73,7 +73,8 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     if(!period.trim()) return alert('Ingresá un período')
     if(!s1.length && !s2.length && !s3.length && !s4.length) return alert('Generá o armá al menos una rutina')
     for(const pl of [s1,s2,s3,s4]) for(const d of pl) if(!d.exercises.length) return alert('El '+d.name+' está vacío')
-    const payload={student_id:Number(student.id)||student.id, period, routine_a:[...s1,...s3], routine_b:[...s2,...s4]}
+    const _sId=String(student?.id??'').trim(); const _studentRef=_sId&&/^\d+$/.test(_sId)?Number(_sId):_sId||student?.id
+    const payload={student_id:_studentRef, period, routine_a:[...s1,...s3], routine_b:[...s2,...s4]}
     // Diseño unificado: una sola fuente por rutina.
     //  - Con red  -> se guarda por API y se refleja el UUID/id de respuesta en el caché local.
     //  - Sin red  -> se encola el alta (apuntando al mismo id local) y la copia local queda "pending"
