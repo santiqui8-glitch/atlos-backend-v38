@@ -57,15 +57,15 @@ export default function App(){
   const refresh=async()=>{
     try{
       const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw]=await Promise.all([
-        api.alumnos().catch(()=>null),
-        api.pagos().catch(()=>null),
-        api.asistencia().catch(()=>null),
-        api.routines().catch(()=>null),
-        api.clases().catch(()=>null),
-        api.ejercicios().catch(()=>null),
-        api.dashboard().catch(()=>null),
-        api.usuarios().catch(()=>null),
-        api.profesores().catch(()=>null),
+        api.alumnos().catch(err=>{ console.warn('[refresh]','alumnos',err?.message||err); return null }),
+        api.pagos().catch(err=>{ console.warn('[refresh]','pagos',err?.message||err); return null }),
+        api.asistencia().catch(err=>{ console.warn('[refresh]','asistencia',err?.message||err); return null }),
+        api.routines().catch(err=>{ console.warn('[refresh]','routines',err?.message||err); return null }),
+        api.clases().catch(err=>{ console.warn('[refresh]','clases',err?.message||err); return null }),
+        api.ejercicios().catch(err=>{ console.warn('[refresh]','ejercicios',err?.message||err); return null }),
+        api.dashboard().catch(err=>{ console.warn('[refresh]','dashboard',err?.message||err); return null }),
+        api.usuarios().catch(err=>{ console.warn('[refresh]','usuarios',err?.message||err); return null }),
+        api.profesores().catch(err=>{ console.warn('[refresh]','profesores',err?.message||err); return null }),
       ])
       const localS=await list('students'); const localP=await list('payments'); const localA=await list('attendance'); const localR=await list('routines')
       // limpieza demo que reaparecía: borrar físico los 3 que están en lista de borrados
@@ -118,7 +118,7 @@ export default function App(){
       if(!Array.isArray(cRaw)) c=localC.filter(x=>!delClases.has(String(x.id)))
       // merge inscripciones locales al contador
       try{ const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); const cnt=new Map(); for(const it of ins){ const k=String(it.clase_id); cnt.set(k,(cnt.get(k)||0)+1)} const cc=[]; for(const x of c){ const y={}; for(const kk in x) y[kk]=x[kk]; y.inscriptos=(Number(x.inscriptos)||0)+(cnt.get(String(x.id))||0); cc.push(y) } c=cc }catch{}
-      const e=Array.isArray(eRaw)?eRaw:[]
+      const e=Array.isArray(eRaw)?eRaw:null
       const delProfs=new Set(JSON.parse(localStorage.getItem('atlos-deleted-profesores')||'[]').map(String))
       const localProfs=JSON.parse(localStorage.getItem('atlos-profesores')||'[]').filter(x=>!delProfs.has(String(x.id)))
       // merge profesores nube + local (el registro de la nube tiene prioridad cuando llega con serverId)
@@ -138,12 +138,9 @@ export default function App(){
         // no reseed demo si el usuario ya borró alumnos (los 3 demo Juan/Sofía/Martín volvían siempre)
         if(import.meta.env.DEV && delAlumnos.size===0 && delAlumnosNames.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id)) && !delAlumnosNames.has(String(x.name||'').toLowerCase())); setStudents(filteredSeeded) } else { setStudents([]) }
       } else setStudents(s)
-      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(e); setProfesores(profs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
+      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
       return
-    }catch(e){ console.error('refresh',e) }
-    // fallback sin reseed demo si ya se borró
-    const delCheck=new Set(JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]').map(v=>String(v).toLowerCase()))
-    if(import.meta.env.DEV && delCheck.size===0){ await seed(); setStudents(await list('students')); setPayments(await list('payments')); setAttendance(await list('attendance')); setRoutines(await list('routines')) } else { setStudents([]); setPayments([]); setAttendance([]); setRoutines([]) }
+    }catch(e){ console.error('refresh',e); return }
   }
   const purgeDemo=async()=>{ if(import.meta.env.DEV) return; try{ const localS=await list('students'); for(const x of localS){ const n=String(x.name||'').toLowerCase(); if(['juan pérez','sofía gómez','martín día'].includes(n)) await remove('students',x.id) } }catch(e){ console.warn('purgeDemo',e) } }
   useEffect(()=>{ if(logged) {purgeDemo().then(()=>refresh()); startSync(refresh); return ()=>stopSync()}},[logged])
