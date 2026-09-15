@@ -32,12 +32,13 @@ async function request(path,{method='GET',body,auth=true}={}){
   
   if(!res.ok){
     const t=await res.text(); let msg=t; try{ const j=JSON.parse(t); msg=j.detail||j.message||j.msg||t }catch{}
+    const mkErr=(m)=>{ const e=new Error(m); e.status=res.status; e.body=t; return e };
     if(res.status===401){ 
       if(auth) clearAuth(); 
-      throw new Error(msg||'No autorizado') 
+      throw mkErr(msg||'No autorizado') 
     }
-    if(res.status===403) throw new Error(msg||'Acceso denegado');
-    throw new Error(msg||`Error ${res.status}`);
+    if(res.status===403) throw mkErr(msg||'Acceso denegado');
+    throw mkErr(msg||`Error ${res.status}`);
   }
   const ct=res.headers.get('content-type')||''; if(ct.includes('application/json')) return res.json(); return res.text();
 }
@@ -152,7 +153,7 @@ export async function flushQueue(){
       else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad});
       else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id);
       else remain.push(item);
-    }catch(e){ remain.push(item) }
+    }catch(e){ const _pl=item.payload||{}; const _ref=_pl._localId||_pl.id||_pl.alumno_id||''; try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} remain.push(item) }
   }
   localStorage.setItem('atlos-queue', JSON.stringify(remain));
   if(remain.length!==q.length) window.dispatchEvent(new Event('atlos-queue-flushed'))
