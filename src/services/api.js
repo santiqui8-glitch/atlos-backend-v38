@@ -103,7 +103,10 @@ export function setToken(t){ if(t) localStorage.setItem('atlos-token',t); else l
 export function clearAuth(){ localStorage.removeItem('atlos-token'); localStorage.removeItem('atlos-session'); localStorage.removeItem('atlos-rol'); localStorage.removeItem('atlos-usuario'); }
 export function isTokenValid(){ try{ const tok=getToken(); if(!tok) return false; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return false; return true }catch{ return false } }
 export function getRole(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.rol||p.role||null; }catch{ return null } }
-export function queuePush(type,payload){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now()}); localStorage.setItem('atlos-queue', JSON.stringify(q)) }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
+// BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
+let flushing=false;
+let pushDuringFlush=false;
+export function queuePush(type,payload){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now()}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
 
 async function flushProfesorCrear(item){
   const lid=String(item.payload._localId||item.payload.id||'')
@@ -138,7 +141,12 @@ async function flushClaseCrear(item){
 }
 
 export async function flushQueue(){
-  const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); if(!q.length) return;
+  if(flushing){ try{ console.warn('[flush] skipped concurrent execution') }catch{} return }
+  flushing=true; pushDuringFlush=false;
+  try{
+  let q=null;
+  try{ q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); if(!Array.isArray(q)) q=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
+  if(!q.length) return;
   const remain=[];
   for(const item of q){
     try{
@@ -155,6 +163,21 @@ export async function flushQueue(){
       else remain.push(item);
     }catch(e){ const _pl=item.payload||{}; const _ref=_pl._localId||_pl.id||_pl.alumno_id||''; try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} remain.push(item) }
   }
-  localStorage.setItem('atlos-queue', JSON.stringify(remain));
-  if(remain.length!==q.length) window.dispatchEvent(new Event('atlos-queue-flushed'))
+  // BLOQUE 4C: preservar operaciones agregadas durante el flush (multiset por JSON para no perder duplicados idénticos).
+  let finalRemain=remain;
+  if(pushDuringFlush){
+    let current=null;
+    try{ current=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); if(!Array.isArray(current)) current=null }catch(err){ console.error('[flush] reread failed, keeping remain only',err?.message||err); current=null }
+    if(current){
+      const counts=new Map();
+      for(const it of q){ const k=JSON.stringify(it); counts.set(k,(counts.get(k)||0)+1) }
+      const extra=[];
+      for(const it of current){ const k=JSON.stringify(it); const n=counts.get(k)||0; if(n>0) counts.set(k,n-1); else extra.push(it) }
+      if(extra.length){ try{ console.warn('[flush] preserved',extra.length,'queued during flush') }catch{} }
+      finalRemain=[...remain, ...extra];
+    }
+  }
+  try{ localStorage.setItem('atlos-queue', JSON.stringify(finalRemain)) }catch(err){ console.error('[flush] persist failed, queue kept on storage',err?.message||err); return }
+  if(finalRemain.length!==q.length || pushDuringFlush) window.dispatchEvent(new Event('atlos-queue-flushed'))
+  }finally{ flushing=false; pushDuringFlush=false }
 }
