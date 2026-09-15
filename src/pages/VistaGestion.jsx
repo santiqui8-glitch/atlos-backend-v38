@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { api, queuePush } from '../services/api'
 import { put, remove } from '../services/db'
-import { money, toISO, toDisplay, onEnterNext } from '../utils/helpers.js'
+import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
 
 
@@ -9,7 +9,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null) // pago a editar
   const selected=payments.find(p=>String(p.id)===String(sel))
-  const totalMes=payments.reduce((a,b)=>a+Number(b.amount||0),0)
+  const totalMes=payments.filter(p=>isSameMonth(p.date, today())).reduce((a,b)=>a+Number(b.amount||0),0)
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná un pago de la lista.')
     if(!confirm(`¿Eliminar pago ID #${selected.id} de ${selected.alumnoNombre||students.find(s=>String(s.id)===String(selected.studentId))?.name||'—'}?`)) return
