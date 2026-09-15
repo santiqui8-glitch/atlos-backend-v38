@@ -27,21 +27,35 @@ function writeQueue(q) {
 }
 
 // Defensa del bug UUID: un id que se pasó por Number() queda NaN y al persistir en JSON se vuelve null.
-// Esos items jamás van a satisfacer al servidor y bloquean el resto de la cola; se descartan.
+// BLOQUE 4A: se detecta y se registra, pero NO se descarta silenciosamente (conserva para diagnóstico/reintento).
 export function sanitizeQueue() {
   const q = readQueue()
   if (!q.length) return 0
-  const hasBadId = v => v === null || v === undefined || v === '' || v === 'NaN'
+  const hasBadId = v => v === null || v === undefined || v === '' || v === 'NaN' || Number.isNaN(v)
+  const badReason = v => {
+    if (v === null) return 'null'
+    if (v === undefined) return 'undefined'
+    if (v === '') return 'empty-string'
+    if (v === 'NaN') return 'string-NaN'
+    if (Number.isNaN(v)) return 'numeric-NaN'
+    return 'unknown'
+  }
   const broken = item => {
     const pl = item.payload || {}
     if (item.type === 'pago' || item.type === 'checkin') return hasBadId(pl.alumno_id)
     if (item.type === 'deleteClase' || item.type === 'updateClase' || item.type === 'updateProfesor' || item.type === 'deleteProfesor') return hasBadId(pl.id)
     return false
   }
-  const clean = q.filter(item => !broken(item))
-  const removed = q.length - clean.length
-  if (removed) writeQueue(clean)
-  return removed
+  let flagged = 0
+  for (const item of q) {
+    if (broken(item)) {
+      flagged++
+      const pl = item.payload || {}
+      const v = (item.type === 'pago' || item.type === 'checkin') ? pl.alumno_id : pl.id
+      try { console.warn('[sync][sanitize]', item.type, badReason(v), item) } catch {}
+    }
+  }
+  return flagged
 }
 
 // Los datos pesados que históricamente vivían en localStorage quedan espejados en IndexedDB.
