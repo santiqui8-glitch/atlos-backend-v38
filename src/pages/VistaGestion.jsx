@@ -14,6 +14,13 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     if(!selected) return alert('Seleccioná un pago de la lista.')
     if(!confirm(`¿Eliminar pago ID #${selected.id} de ${selected.alumnoNombre||students.find(s=>String(s.id)===String(selected.studentId))?.name||'—'}?`)) return
     const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos',JSON.stringify(del))
+    // BLOQUE 4K-B: cancelar create pendiente de este pago (evita fantasma en backend, como alumnos).
+    try{
+      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+      const _id=String(selected._localId||selected.id||'');
+      const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_id));
+      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+    }catch{}
     await remove('payments',selected.id)
     setSel(null); refresh()
   }
@@ -25,8 +32,29 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     e.preventDefault(); const f=new FormData(e.currentTarget)
     const sid=f.get('alumno'); const isUUID=String(sid).includes('-')
     const fechaISO=toISO(f.get('fecha')); const data={alumno_id:isUUID?String(sid):Number(sid), monto:Number(f.get('monto')), concepto:f.get('concepto'), metodo:f.get('metodo'), fecha:fechaISO}
-    if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos', JSON.stringify(del)); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')) queuePush('pago', {alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}) } }
-    await remove('payments',selected.id); await put('payments',{id:selected.id,studentId:String(sid),amount:data.monto,date:fechaISO,note:data.concepto,metodo:data.metodo})
+    // BLOQUE 4K-B: vínculo local del pago (coalescing por _localId, como alumnos).
+    const _lid=String(selected._localId||selected.id||'');
+    const coalescePago=(patch,fechaMeta)=>{
+      if(!_lid) return false;
+      try{
+        const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+        let _hit=false;
+        const _f=_q.map(it=>{ if(it.type==='pago'&&String(it.payload?._localId||'')===_lid){ _hit=true; const _np={...it.payload, ...patch}; const _ni={...it, payload:_np}; if(fechaMeta!==undefined) _ni.fecha=fechaMeta; return _ni } return it });
+        if(_hit) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+        return _hit;
+      }catch{ return false }
+    };
+    const dropPendingPago=()=>{
+      if(!_lid) return;
+      try{
+        const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_lid));
+        if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+      }catch{}
+    };
+    if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos', JSON.stringify(del)); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')){ const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}; if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO}) } } }
+    await remove('payments',selected.id); await put('payments',{id:selected.id,_localId:selected._localId||selected.id,studentId:String(sid),amount:data.monto,date:fechaISO,note:data.concepto,metodo:data.metodo})
+    coalescePago({alumno_id:isUUID?String(sid):Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}, fechaISO);
     setEdit(null); setSel(null); refresh()
   }
   return <section className="panel">

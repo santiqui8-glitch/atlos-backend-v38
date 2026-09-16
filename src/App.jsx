@@ -23,6 +23,7 @@ import VistaLicencias from './pages/VistaLicencias.jsx'
 let savingClase=false;
 let savingProfesor=false;
 let savingAlumno=false;
+let savingPago=false;
 
 export default function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem('atlos-session')==='1' && isTokenValid())
@@ -203,9 +204,11 @@ export default function App(){
     refresh() 
     }finally{ savingAlumno=false }
   }
-  const savePayment=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-'); const monto=Number(f.get('amount')); const fecha=f.get('date')||today(); const note=f.get('note')||'Cuota Mensual'; const metodo='Efectivo'
-    if(!isLocalUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo}) } }
-    await put('payments',{id:crypto.randomUUID(),studentId:String(sid),amount:monto,date:fecha,note,metodo}); setModal(null); refresh() }
+  const savePayment=async(e)=>{ e.preventDefault(); if(savingPago) return; savingPago=true; try{
+    const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-'); const monto=Number(f.get('amount')); const fecha=f.get('date')||today(); const note=f.get('note')||'Cuota Mensual'; const metodo='Efectivo'
+    const localId=crypto.randomUUID();
+    if(!isLocalUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo, _localId:localId}, {fecha}) } }
+    await put('payments',{id:localId,_localId:localId,studentId:String(sid),amount:monto,date:fecha,note,metodo}); setModal(null); refresh() }finally{ savingPago=false } }
   const markAttendanceDNI=async(dni)=>{ // torniquete por DNI
     const alum=students.find(s=>String(s.dni)===String(dni).trim() || String(s.phone)===String(dni).trim())
     if(!alum) throw new Error('DNI no encontrado')

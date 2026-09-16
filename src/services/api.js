@@ -106,7 +106,7 @@ export function getRole(){ try{ const tok=getToken(); if(!tok) return null; cons
 // BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
 let flushing=false;
 let pushDuringFlush=false;
-export function queuePush(type,payload){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now()}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
+export function queuePush(type,payload,extra){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now(),...(extra&&typeof extra==='object'?extra:{})}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
 
 // BLOQUE 4J-B: remapea referencias UUID → sid en items de cola (mismo objeto, sin cambiar formato).
 function remapPendingAlumno(items, lid, sid){
@@ -200,7 +200,7 @@ export async function flushQueue(){
           }
         }catch(_e){ console.warn('[flush] alumno dependents storage',_e?.message||_e,_m.lid) }
       } }
-      else if(item.type==='pago') await api.crearPago(item.payload);
+      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody); }
       else if(item.type==='checkin') await api.checkin(item.payload.alumno_id);
       else if(item.type==='clase') await flushClaseCrear(item);
       else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id);
