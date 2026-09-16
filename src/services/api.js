@@ -188,6 +188,17 @@ async function flushClaseCrear(item){
   const idx=arr.findIndex(c=>String(c.id)===String(lid))
   if(idx>=0 && sid){ arr[idx]={...arr[idx], id:String(sid), pending:false, serverId:String(sid)} }
   localStorage.setItem('atlos-clases',JSON.stringify(arr))
+  // BLOQUE 4N: migrar inscripciones _localId → sid (solo con sid válido, como 4J-B).
+  if(sid && lid){
+    try{
+      const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      if(Array.isArray(ins)){
+        let ch=false;
+        for(const it of ins){ if(it&&String(it.clase_id??'')===String(lid)){ it.clase_id=String(sid); ch=true } }
+        if(ch) localStorage.setItem('atlos-inscripciones',JSON.stringify(ins));
+      }
+    }catch(e){ console.warn('[flush] clase inscripciones',e?.message||e,lid) }
+  }
 }
 
 export async function flushQueue(){

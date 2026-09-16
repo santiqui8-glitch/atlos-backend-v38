@@ -234,7 +234,7 @@ export default function App(){
     const f=new FormData(e.currentTarget); const data={nombre:f.get('nombre'), dia_mes:f.get('dia')||'Lunes', hora_inicio:f.get('inicio')||'08:00', hora_fin:f.get('fin')||'09:00', capacidad: f.get('cap')==='Ilimitada'? 999 : Number(f.get('cap')||20), profesor:f.get('profesor')||''}
     const localId='clase-'+Date.now(); let ok=false; let serverId=null; let pendiente=false
     if(navigator.onLine){
-      try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}); pendiente=true } }
+      try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}) } }
     } else { queuePush('clase',{...data,_localId:localId}); pendiente=true }
     if(!ok){ const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); localStorage.setItem('atlos-clases',JSON.stringify(local)) }
     setModal(null); refresh() }finally{ savingClase=false } }

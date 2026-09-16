@@ -38,21 +38,25 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     const data={nombre:f.get('nombre'), dia_mes:f.get('dia'), hora_inicio:f.get('inicio'), hora_fin:f.get('fin'), capacidad:capNum, profesor:f.get('profesor')}
     const isLocal=String(edit.id).includes('-') || String(edit.id).length>10
     const targetId=edit.serverId || (isLocal? null : edit.id)
+    let updateRejected=false
     if(targetId){
       // ENDPOINT ESPERADO: PUT /clases/{id}. Antes se hacía crearClase() y duplicaba la clase en la nube.
       try{ await api.actualizarClase(targetId, data) }
-      catch(err){ console.warn('editar clase api',err.message); if(esErrorDeRed(err)) queuePush('updateClase',{id:targetId, ...data}) }
+      catch(err){ console.warn('editar clase api',err.message); if(esErrorDeRed(err)) queuePush('updateClase',{id:targetId, ...data}); else updateRejected=true }
     } else if(edit.pending){
       // clase creada offline sin confirmar: pisar el payload encolado con los datos editados
       const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
       const q2=q.map(it=> (it.type==='clase' && String(it.payload._localId||it.payload.id)===String(edit.id)) ? {...it, payload:{...it.payload, ...data}} : it)
-      localStorage.setItem('atlos-queue', JSON.stringify(q2))
+      localStorage.setItem('atlos-queue',JSON.stringify(q2))
     }
+    // BLOQUE 4N: si el backend rechazó el PUT, no persistir el override como válido.
+    if(!updateRejected){
     // local fallback: actualizar en atlos-clases
     const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const idx=local.findIndex(c=>String(c.id)===String(edit.id))
     if(idx>=0){ local[idx]={...local[idx],...data}; localStorage.setItem('atlos-clases',JSON.stringify(local)) }
     else { // si era de la nube, crear override local
       local.push({id:edit.serverId||edit.id, serverId:edit.serverId||null, pending:edit.pending||false, ...data, inscriptos: edit.inscriptos||0}); localStorage.setItem('atlos-clases',JSON.stringify(local))
+    }
     }
     setEdit(null); refresh()
   }
