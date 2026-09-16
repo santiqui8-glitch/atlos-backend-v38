@@ -22,6 +22,7 @@ import VistaLicencias from './pages/VistaLicencias.jsx'
 // BLOQUE 4F: guards de doble submit (sin cambiar UI ni payloads).
 let savingClase=false;
 let savingProfesor=false;
+let savingAlumno=false;
 
 export default function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem('atlos-session')==='1' && isTokenValid())
@@ -173,6 +174,7 @@ export default function App(){
     if(edad && !/^\d+$/.test(edad)) return alert('La edad debe ser un número.'); 
     if(dni && !/^\d+$/.test(dni)) return alert('DNI debe ser numérico.'); 
     if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return alert('Mail inválido.');
+    if(savingAlumno) return; savingAlumno=true; try{
     
     // si re-crea un nombre previamente borrado, liberar el filtro para que no se borre al refrescar
     { 
@@ -187,9 +189,9 @@ export default function App(){
     try{ await api.crearAlumno(data); cloudOk=true }catch(err){ console.warn('crearAlumno api fallo',err.message)}
     
     if(!cloudOk){ 
-      const _altaOffline={id:crypto.randomUUID()}; 
-      await put('students',{id:_altaOffline.id,name:nombreCompleto,apellido,dni:dni||'',phone:telefono,mail:mail||'',fecha_nacimiento:fecha_nac,edad:edad?Number(edad):null,enfoque,observaciones,joinedAt:fecha,status:'activo',createdAt:new Date().toISOString()}); 
-      queuePush('alumno', data) 
+      const localId=crypto.randomUUID();
+      await put('students',{id:localId,name:nombreCompleto,apellido,dni:dni||'',phone:telefono,mail:mail||'',fecha_nacimiento:fecha_nac,edad:edad?Number(edad):null,enfoque,observaciones,joinedAt:fecha,status:'activo',createdAt:new Date().toISOString()});
+      queuePush('alumno', {...data, _localId:localId})
     } else if(dni||mail||enfoque||observaciones||apellido||fecha_nac){
       const extKey='atlos-alumnos-ext'; 
       const ext=JSON.parse(localStorage.getItem(extKey)||'{}'); 
@@ -199,6 +201,7 @@ export default function App(){
     
     setModal(null); 
     refresh() 
+    }finally{ savingAlumno=false }
   }
   const savePayment=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-'); const monto=Number(f.get('amount')); const fecha=f.get('date')||today(); const note=f.get('note')||'Cuota Mensual'; const metodo='Efectivo'
     if(!isLocalUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo}) } }

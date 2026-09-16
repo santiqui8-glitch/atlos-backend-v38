@@ -1,4 +1,4 @@
-import { list, put } from './db';
+import { list, put, remove } from './db';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://atlos-api-production.up.railway.app';
 
@@ -108,6 +108,22 @@ let flushing=false;
 let pushDuringFlush=false;
 export function queuePush(type,payload){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now()}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
 
+async function flushAlumnoCrear(item){
+  const { _localId, ...body }=(item.payload||{});
+  const r=await api.crearAlumno(body);
+  const lid=_localId?String(_localId):null;
+  if(!lid) return;
+  const sid=(r&&(r.id??r._id))||null;
+  if(!sid) return;
+  try{
+    const rows=await list('students');
+    const row=rows.find(x=>String(x.id)===lid);
+    if(!row) return;
+    await put('students',{...row, id:String(sid), serverId:String(sid), pending:false});
+    await remove('students',row.id);
+  }catch(e){ console.warn('[flush] alumno reconcile',e?.message||e,lid) }
+}
+
 async function flushProfesorCrear(item){
   const lid=String(item.payload._localId||item.payload.id||'')
   const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
@@ -150,7 +166,7 @@ export async function flushQueue(){
   const remain=[];
   for(const item of q){
     try{
-      if(item.type==='alumno') await api.crearAlumno(item.payload);
+      if(item.type==='alumno') await flushAlumnoCrear(item);
       else if(item.type==='pago') await api.crearPago(item.payload);
       else if(item.type==='checkin') await api.checkin(item.payload.alumno_id);
       else if(item.type==='clase') await flushClaseCrear(item);

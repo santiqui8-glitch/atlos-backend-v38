@@ -24,6 +24,13 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
     // borrar local y duplicados por nombre (soluciona duplicado UUID+cloud que hacía que "vuelva a aparecer")
     await remove('students',target.id)
     for(const s of students){ if(s.name?.toLowerCase()===target.name?.toLowerCase() && String(s.id)!==String(target.id)){ await remove('students',s.id) } }
+    // BLOQUE 4H: cancelar POST pendiente de este alumno offline (evita fantasma en backend).
+    try{
+      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+      const _id=String(target.id);
+      const _f=_q.filter(it=>!(it.type==='alumno' && String(it.payload?._localId||'')===_id));
+      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+    }catch{}
     const del=JSON.parse(localStorage.getItem('atlos-deleted-alumnos')||'[]'); del.push(String(target.id)); localStorage.setItem('atlos-deleted-alumnos',JSON.stringify(del))
     const delNames=JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]'); delNames.push(target.name.toLowerCase()); localStorage.setItem('atlos-deleted-alumnos-names',JSON.stringify([...new Set(delNames)]))
     const ext=JSON.parse(localStorage.getItem('atlos-alumnos-ext')||'{}'); delete ext[target.name.toLowerCase()]; localStorage.setItem('atlos-alumnos-ext',JSON.stringify(ext))
@@ -52,6 +59,13 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       }catch(err){ console.warn('actualizar api fallo',err.message)}
     }
     await put('students',{id:edit.id, name:nombreCompleto, apellido, dni: dni||edit.dni, phone:telefono, mail:mail||edit.mail||'', fecha_nacimiento:fecha_nac||edit.fecha_nacimiento||'', enfoque, observaciones, joinedAt:fecha||edit.joinedAt, status:edit.status||'activo', edad:edad?Number(edad):null, createdAt:edit.createdAt||new Date().toISOString()})
+    // BLOQUE 4H: si este alumno tiene un POST pendiente, actualizarlo (coalescing por _localId, como clases).
+    try{
+      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+      const _id=String(edit.id);
+      const _f=_q.map(it=> (it.type==='alumno' && String(it.payload?._localId||'')===_id) ? {...it, payload:{...it.payload, nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha||edit.joinedAt}} : it);
+      localStorage.setItem('atlos-queue',JSON.stringify(_f));
+    }catch{}
     // actualizar extMap para que refresh lo preserve
     { const extKey='atlos-alumnos-ext'; const ext=JSON.parse(localStorage.getItem(extKey)||'{}'); const k=nombreCompleto.toLowerCase(); ext[k]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; localStorage.setItem(extKey,JSON.stringify(ext)) }
     setEdit(null); refresh()
