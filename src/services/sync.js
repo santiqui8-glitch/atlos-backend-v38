@@ -133,7 +133,7 @@ async function pullAll() {
     alumnoNombre: p.alumno_nombre || p.alumno || '',
   }))
   if (pRows.length) await bulkPut('payments', pRows)
-  const aRows = attendance.map(a => ({
+  const aRows = attendance.filter(a=>!delAlumnosIds.has(String(a.alumno_id||a.student_id||a.studentId||''))).map(a => ({
     id: String(a.id),
     studentId: String(a.alumno_id || a.student_id || a.studentId || ''),
     date: String(a.fecha || a.date || '').slice(0, 10),

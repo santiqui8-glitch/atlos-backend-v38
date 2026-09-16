@@ -201,7 +201,7 @@ export async function flushQueue(){
         }catch(_e){ console.warn('[flush] alumno dependents storage',_e?.message||_e,_m.lid) }
       } }
       else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody); }
-      else if(item.type==='checkin') await api.checkin(item.payload.alumno_id);
+      else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
       else if(item.type==='clase') await flushClaseCrear(item);
       else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id);
       else if(item.type==='updateClase') await api.actualizarClase(item.payload.id,{nombre:item.payload.nombre,dia_mes:item.payload.dia_mes,hora_inicio:item.payload.hora_inicio,hora_fin:item.payload.hora_fin,capacidad:item.payload.capacidad,profesor:item.payload.profesor});

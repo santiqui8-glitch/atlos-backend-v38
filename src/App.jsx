@@ -24,6 +24,10 @@ let savingClase=false;
 let savingProfesor=false;
 let savingAlumno=false;
 let savingPago=false;
+// BLOQUE 4L-B: guard + cooldown de torniquete (por alumno, configurable).
+let savingCheckin=false;
+const lastCheckin=new Map();
+const CHECKIN_COOLDOWN_MS=60_000;
 
 export default function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem('atlos-session')==='1' && isTokenValid())
@@ -105,7 +109,7 @@ export default function App(){
         p=Array.from(byContent.values())
       } else p=localP
       p=p.filter(x=>!delPagos.has(String(x.id)) && !delAlumnos.has(String(x.studentId)))
-      const a=aCloud? Array.from(new Map([...aCloud,...localA].map(x=>[String(x.id),x])).values()) : localA
+      const a=aCloud? Array.from(new Map([...aCloud,...localA].map(x=>[String(x.id),x])).values()).filter(x=>!delAlumnos.has(String(x.studentId))) : localA.filter(x=>!delAlumnos.has(String(x.studentId)))
       const r=rCloud? Array.from(new Map([...rCloud,...localR].map(x=>[String(x.id),x])).values()) : localR
       const delClases=new Set(JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]').map(String))
       const localC=JSON.parse(localStorage.getItem('atlos-clases')||'[]')
@@ -213,9 +217,17 @@ export default function App(){
     const alum=students.find(s=>String(s.dni)===String(dni).trim() || String(s.phone)===String(dni).trim())
     if(!alum) throw new Error('DNI no encontrado')
     const safeId=String(alum.id); const alumnoRef=/^\d+$/.test(safeId)? Number(safeId) : safeId; // UUID offline se preserva (Number(uuid)=NaN)
-    try{ await api.checkin(alumnoRef); }catch(err){ await put('attendance',{id:crypto.randomUUID(),studentId:alum.id,date:today(),time:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}); if(/Failed to fetch|fetch/.test(String(err.message||''))) queuePush('checkin', {alumno_id:alumnoRef}) }
-    refresh()
-    return alum
+    const _ck=String(alumnoRef);
+    if(savingCheckin) return alum;
+    if(Date.now()-(_ck? (lastCheckin.get(_ck)||0):0)<CHECKIN_COOLDOWN_MS) return alum;
+    savingCheckin=true;
+    try{
+      const localId=crypto.randomUUID();
+      const _fecha=today(); const _hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+      try{ await api.checkin(alumnoRef); lastCheckin.set(_ck,Date.now()); }catch(err){ await put('attendance',{id:localId,_localId:localId,studentId:alum.id,date:_fecha,time:_hora}); lastCheckin.set(_ck,Date.now()); if(/Failed to fetch|fetch/.test(String(err.message||''))) queuePush('checkin', {alumno_id:alumnoRef,_localId:localId}, {fecha:_fecha,hora:_hora}) }
+      refresh()
+      return alum
+    }finally{ savingCheckin=false }
   }
   const saveRoutine=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); await put('routines',{id:crypto.randomUUID(),studentId:f.get('studentId'),day:f.get('day'),exercise:f.get('exercise'),series:f.get('series'),reps:f.get('reps'),notes:f.get('notes')||''}); setModal(null); refresh() }
   const saveClase=async(e)=>{ e.preventDefault(); if(savingClase) return; savingClase=true; try{
