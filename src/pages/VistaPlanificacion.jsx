@@ -37,6 +37,13 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
     // borrar pagos y asistencia locales de ese alumno
     for(const p of await list('payments')){ if(String(p.studentId)===String(target.id) || (p.alumnoNombre&&p.alumnoNombre.toLowerCase()===target.name.toLowerCase())) await remove('payments',p.id) }
     for(const a of await list('attendance')){ if(String(a.studentId)===String(target.id)) await remove('attendance',a.id) }
+    // BLOQUE 4P: cascada local — borrar inscripciones del alumno eliminado.
+    try{
+      const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _ids=[target.id,target.serverId].filter(Boolean).map(String);
+      const _f=_ins.filter(x=>!_ids.includes(String(x.alumno_id??'')));
+      if(_f.length!==_ins.length) localStorage.setItem('atlos-inscripciones',JSON.stringify(_f));
+    }catch{}
     setSel(null); refresh()
   }
   const handleEdit=()=>{ if(!selected) return alert('Seleccioná un alumno de la lista.'); setEdit(selected) }

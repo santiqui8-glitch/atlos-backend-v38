@@ -4,6 +4,8 @@ import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
 
+// BLOQUE 4P: guard de doble submit de inscripción.
+let savingInscribir=false;
 
 export default function VistaClases({clases,students,profesores=[],onNew,refresh}){
   const [sel,setSel]=useState(null)
@@ -26,6 +28,13 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       localStorage.setItem('atlos-queue', JSON.stringify(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id)))))
     }
     const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const filt=local.filter(c=>String(c.id)!==String(selected.id)); localStorage.setItem('atlos-clases',JSON.stringify(filt))
+    // BLOQUE 4P: cascada local — borrar inscripciones de la clase eliminada.
+    try{
+      const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _ids=[selected.id,selected.serverId].filter(Boolean).map(String);
+      const _f=_ins.filter(x=>!_ids.includes(String(x.clase_id??'')));
+      if(_f.length!==_ins.length) localStorage.setItem('atlos-inscripciones',JSON.stringify(_f));
+    }catch{}
     try{ await remove('clases',selected.id).catch(()=>{}); await remove('clases',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('clases',String(selected.serverId)).catch(()=>{}) }catch{}
     const del=JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-clases',JSON.stringify(del))
     setSel(null); refresh()
@@ -61,16 +70,30 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     setEdit(null); refresh()
   }
   const doInscribir=async(e)=>{
-    e.preventDefault(); const f=new FormData(e.currentTarget); const alumnoId=f.get('alumno')
+    e.preventDefault(); if(savingInscribir) return; savingInscribir=true; try{
+    const f=new FormData(e.currentTarget); const alumnoId=f.get('alumno')
     const _aSid=String(alumnoId??'').trim(); const _alumnoRef=/^\d+$/.test(_aSid)?Number(_aSid):_aSid
-    try{ await api.inscribirClase(selected.id, _alumnoRef) }catch(err){ console.warn('inscribir api',err.message); // local fallback: incrementar inscriptos
+    try{ await api.inscribirClase(selected.id, _alumnoRef) }catch(err){ console.warn('inscribir api',err.message);
+      // BLOQUE 4P: fallback local solo si no es un rechazo definitivo 4xx (usa err.status de 4B).
+      const _st=err&&typeof err.status==='number'?err.status:null;
+      const _okFallback=esErrorDeRed(err)||_st==null||_st>=500||_st===429;
+      if(!_okFallback){ console.warn('[inscribir] rechazado por backend, sin fallback local',_st) }
+      else {
+      // local fallback: incrementar inscriptos (evita duplicar la misma inscripción)
+      const _cf=today();
+      const _ins0=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _dup=Array.isArray(_ins0)&&_ins0.some(x=>String(x.clase_id)===String(selected.id)&&String(x.alumno_id)===String(alumnoId)&&String(x.fecha)===String(_cf));
+      if(!_dup){
       const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const idx=local.findIndex(c=>String(c.id)===String(selected.id))
       if(idx>=0){ local[idx].inscriptos=(Number(local[idx].inscriptos)||0)+1; localStorage.setItem('atlos-clases',JSON.stringify(local)) }
       else { const cloudIdx=clases.findIndex(c=>String(c.id)===String(selected.id)); if(cloudIdx>=0){ const copy=[...clases]; copy[cloudIdx]={...copy[cloudIdx], inscriptos:(Number(copy[cloudIdx].inscriptos)||0)+1}; localStorage.setItem('atlos-clases',JSON.stringify(copy)) } }
       // guardar inscripción local para detalle
-      const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); ins.push({clase_id:selected.id, alumno_id:alumnoId, fecha:today()}); localStorage.setItem('atlos-inscripciones',JSON.stringify(ins))
+      const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); ins.push({clase_id:selected.id, alumno_id:alumnoId, fecha:_cf}); localStorage.setItem('atlos-inscripciones',JSON.stringify(ins))
+      }
+      }
     }
     setInscribir(null); refresh()
+    }finally{ savingInscribir=false }
   }
   return <section className="panel">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
