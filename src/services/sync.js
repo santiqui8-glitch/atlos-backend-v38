@@ -26,6 +26,11 @@ function writeQueue(q) {
   try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)) } catch {}
 }
 
+// BLOQUE 4D: IDs eliminados por ID (nunca por nombre) para no reinsertar en IDB.
+function readDeletedIds(key) {
+  try { const a=JSON.parse(localStorage.getItem(key)||'[]'); return new Set((Array.isArray(a)?a:[]).map(String)) } catch { return new Set() }
+}
+
 // Defensa del bug UUID: un id que se pasó por Number() queda NaN y al persistir en JSON se vuelve null.
 // BLOQUE 4A: se detecta y se registra, pero NO se descarta silenciosamente (conserva para diagnóstico/reintento).
 export function sanitizeQueue() {
@@ -65,7 +70,8 @@ async function mirrorLocalStorageToIdb() {
     try {
       const rows = JSON.parse(localStorage.getItem(key) || '[]')
       if (Array.isArray(rows) && rows.length) {
-        const clean = rows.filter(x => x && x.id !== undefined).map(x => ({ ...x, id: String(x.id) }))
+        const delIds = storeName==='clases' ? readDeletedIds('atlos-deleted-clases') : storeName==='profesores' ? readDeletedIds('atlos-deleted-profesores') : null
+        const clean = rows.filter(x => x && x.id !== undefined && !(delIds && delIds.has(String(x.id)))).map(x => ({ ...x, id: String(x.id) }))
         if (clean.length) await bulkPut(storeName, clean)
       }
     } catch {}
@@ -90,9 +96,14 @@ async function pullAll() {
   try { extMap = JSON.parse(localStorage.getItem('atlos-alumnos-ext') || '{}') } catch {}
   const existing = await list('students')
   const byId = new Map(existing.map(x => [String(x.id), x]))
+  const delAlumnosIds = readDeletedIds('atlos-deleted-alumnos')
+  const delPagosIds = readDeletedIds('atlos-deleted-pagos')
+  const delClasesIds = readDeletedIds('atlos-deleted-clases')
+  const delProfsIds = readDeletedIds('atlos-deleted-profesores')
   const now = new Date().toISOString()
   const studentsToPut = []
   for (const s of students) {
+    if(delAlumnosIds.has(String(s.id))) continue
     const ex = extMap[String(s.nombre || '').toLowerCase()]
     const prev = byId.get(String(s.id)) || {}
     studentsToPut.push({
@@ -112,7 +123,7 @@ async function pullAll() {
     })
   }
   if (studentsToPut.length) await bulkPut('students', studentsToPut)
-  const pRows = payments.map(p => ({
+  const pRows = payments.filter(p=>!delPagosIds.has(String(p.id)) && !delAlumnosIds.has(String(p.alumno_id||p.student_id||p.studentId||''))).map(p => ({
     id: String(p.id),
     studentId: String(p.alumno_id || p.student_id || p.studentId || ''),
     amount: p.monto ?? p.amount ?? 0,
@@ -141,7 +152,7 @@ async function pullAll() {
     period: r.period || '',
   }))
   if (rRows.length) await bulkPut('routines', rRows)
-  const cRows = Array.isArray(clases) ? clases.map(c => ({
+  const cRows = Array.isArray(clases) ? clases.filter(c=>!delClasesIds.has(String(c.id))).map(c => ({
     id: String(c.id),
     nombre: c.nombre || c.name || '',
     dia_mes: c.dia_mes || c.dia || '',
@@ -152,7 +163,7 @@ async function pullAll() {
     inscriptos: c.inscriptos || c.inscriptos_count || 0,
   })) : []
   if (cRows.length) await bulkPut('clases', cRows)
-  const prRows = Array.isArray(profesores) ? profesores.map(x => {
+  const prRows = Array.isArray(profesores) ? profesores.filter(x=>!delProfsIds.has(String(x.id))).map(x => {
     const nombreCompleto = x.nombreCompleto || `${x.nombre || ''} ${x.apellido || ''}`.trim()
     return {
       id: String(x.id),

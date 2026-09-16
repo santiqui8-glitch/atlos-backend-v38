@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api, queuePush, esErrorDeRed } from '../services/api'
+import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
 
@@ -25,6 +26,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       localStorage.setItem('atlos-queue', JSON.stringify(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id)))))
     }
     const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const filt=local.filter(c=>String(c.id)!==String(selected.id)); localStorage.setItem('atlos-clases',JSON.stringify(filt))
+    try{ await remove('clases',selected.id).catch(()=>{}); await remove('clases',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('clases',String(selected.serverId)).catch(()=>{}) }catch{}
     const del=JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-clases',JSON.stringify(del))
     setSel(null); refresh()
   }

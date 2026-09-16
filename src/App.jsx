@@ -68,21 +68,15 @@ export default function App(){
         api.profesores().catch(err=>{ console.warn('[refresh]','profesores',err?.message||err); return null }),
       ])
       const localS=await list('students'); const localP=await list('payments'); const localA=await list('attendance'); const localR=await list('routines')
-      // limpieza demo que reaparecía: borrar físico los 3 que están en lista de borrados
-      if(localS.length){
-        const delNamesLC=new Set(JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]').map(v=>String(v).toLowerCase()))
-        for(const x of [...localS]){ if(delNamesLC.has(String(x.name||'').toLowerCase())) await remove('students',x.id) }
-      }
       const sCloud=Array.isArray(sRaw)?sRaw.map(j=>({id:String(j.id),name:j.nombre||j.name||'Sin nombre',dni:j.dni||j.telefono||'',phone:j.telefono||j.phone||'',joinedAt:j.fecha_ingreso||j.joinedAt||today(),status:j.status||'activo',edad:j.edad||null,email:j.email||'', experience:j.experience||'principiante', goal:j.goal||j.enfoque||'hipertrofia', days_per_week:j.days_per_week||3, notes:j.notes||''})):null
       const pCloud=Array.isArray(pRaw)?pRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),amount:j.monto??j.amount??0,date:j.fecha||j.date||today(),note:j.concepto||j.note||'',metodo:j.metodo||'Efectivo',alumnoNombre:j.alumno_nombre||j.alumno||null})):null
       const aCloud=Array.isArray(aRaw)?aRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),date:j.fecha||j.date||today(),time:j.hora_entrada||j.time||'',activo:j.activo,alumnoNombre:j.alumno_nombre})):null
       const rCloud=Array.isArray(rRaw)?rRaw:null
       const delAlumnos=new Set(JSON.parse(localStorage.getItem('atlos-deleted-alumnos')||'[]').map(String))
       const delPagos=new Set(JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]').map(String))
-      const delAlumnosNames=new Set(JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]').map(v=>String(v).toLowerCase()))
       const extMap=JSON.parse(localStorage.getItem('atlos-alumnos-ext')||'{}')
       let s=sCloud? Array.from(new Map([...sCloud.map(x=>{const k=x.name?.toLowerCase(); const ex=extMap[k]; if(ex) return {...x, apellido:ex.apellido, dni:ex.dni||x.dni, mail:ex.mail||x.mail||x.email, fecha_nacimiento:ex.fecha_nacimiento||x.fecha_nacimiento||'', enfoque:ex.enfoque, observaciones:ex.observaciones}; return x}),...localS].map(x=>[String(x.id),x])).values()) : localS
-      s=s.filter(x=>!delAlumnos.has(String(x.id)) && !delAlumnosNames.has(String(x.name||'').toLowerCase()))
+      s=s.filter(x=>!delAlumnos.has(String(x.id)))
       // dedup: solo colapsa duplicado UUID+cloud del mismo nombre (evitar perder homónimos con distinto DNI)
       { const byName=new Map(); for(const x of s){ const nameKey=String(x.name||'').toLowerCase().trim(); const dniKey=String(x.dni||'').trim().toLowerCase(); const k=nameKey+'|'+dniKey; if(!nameKey){ byName.set(String(x.id),x); continue }
         // si ya existe mismo nombre, verificar DNI: si ambos tienen DNI distinto y no vacío, son homónimos distintos -> no dedup
@@ -105,7 +99,7 @@ export default function App(){
         }
         p=Array.from(byContent.values())
       } else p=localP
-      p=p.filter(x=>!delPagos.has(String(x.id)) && !delAlumnos.has(String(x.studentId)) && !delAlumnosNames.has(String(x.alumnoNombre||'').toLowerCase()))
+      p=p.filter(x=>!delPagos.has(String(x.id)) && !delAlumnos.has(String(x.studentId)))
       const a=aCloud? Array.from(new Map([...aCloud,...localA].map(x=>[String(x.id),x])).values()) : localA
       const r=rCloud? Array.from(new Map([...rCloud,...localR].map(x=>[String(x.id),x])).values()) : localR
       const delClases=new Set(JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]').map(String))
@@ -136,7 +130,7 @@ export default function App(){
       const profs=Array.from(profByKey.values()).filter(x=>!delProfs.has(String(x.id)))
       if(!s.length){
         // no reseed demo si el usuario ya borró alumnos (los 3 demo Juan/Sofía/Martín volvían siempre)
-        if(import.meta.env.DEV && delAlumnos.size===0 && delAlumnosNames.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id)) && !delAlumnosNames.has(String(x.name||'').toLowerCase())); setStudents(filteredSeeded) } else { setStudents([]) }
+        if(import.meta.env.DEV && delAlumnos.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id))); setStudents(filteredSeeded) } else { setStudents([]) }
       } else setStudents(s)
       setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
       return
