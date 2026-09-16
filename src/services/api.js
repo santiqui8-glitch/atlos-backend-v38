@@ -108,20 +108,41 @@ let flushing=false;
 let pushDuringFlush=false;
 export function queuePush(type,payload){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now()}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
 
+// BLOQUE 4J-B: remapea referencias UUID → sid en items de cola (mismo objeto, sin cambiar formato).
+function remapPendingAlumno(items, lid, sid){
+  let n=0;
+  for(const it of items||[]){
+    const pl=it&&it.payload; if(!pl||typeof pl!=='object') continue;
+    if(it.type==='checkin'&&String(pl.alumno_id??'')===lid){ pl.alumno_id=sid; n++ }
+    else if(it.type==='routine'&&String(pl.student_id??'')===lid){ pl.student_id=sid; n++ }
+    else if(it.type==='pago'&&String(pl.alumno_id??'')===lid){ pl.alumno_id=sid; n++ }
+  }
+  return n;
+}
+
 async function flushAlumnoCrear(item){
   const { _localId, ...body }=(item.payload||{});
   const r=await api.crearAlumno(body);
   const lid=_localId?String(_localId):null;
-  if(!lid) return;
+  if(!lid) return null;
   const sid=(r&&(r.id??r._id))||null;
-  if(!sid) return;
+  if(!sid) return null;
   try{
     const rows=await list('students');
     const row=rows.find(x=>String(x.id)===lid);
-    if(!row) return;
+    if(!row) return null;
     await put('students',{...row, id:String(sid), serverId:String(sid), pending:false});
     await remove('students',row.id);
-  }catch(e){ console.warn('[flush] alumno reconcile',e?.message||e,lid) }
+  }catch(e){ console.warn('[flush] alumno reconcile',e?.message||e,lid); return null }
+  // BLOQUE 4J-B: migrar referencias locales UUID → sid (solo tras reconcile exitoso).
+  const nsid=String(sid);
+  for(const store of ['payments','attendance','routines']){
+    try{
+      const rows=await list(store);
+      for(const row of rows){ if(String(row.studentId)===lid){ await put(store,{...row, studentId:nsid}) } }
+    }catch(e){ console.warn('[flush] alumno dependents',store,e?.message||e,lid) }
+  }
+  return {lid, sid:nsid};
 }
 
 async function flushProfesorCrear(item){
@@ -166,7 +187,19 @@ export async function flushQueue(){
   const remain=[];
   for(const item of q){
     try{
-      if(item.type==='alumno') await flushAlumnoCrear(item);
+      if(item.type==='alumno'){ const _m=await flushAlumnoCrear(item); if(_m){ remapPendingAlumno(q,_m.lid,_m.sid);
+        // BLOQUE 4J-B: misma migración en storage + inscripciones (bloque síncrono, sin await entremedio).
+        try{
+          const _cq=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+          if(Array.isArray(_cq)&&remapPendingAlumno(_cq,_m.lid,_m.sid)) localStorage.setItem('atlos-queue',JSON.stringify(_cq));
+          const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+          if(Array.isArray(_ins)){
+            let _ic=false;
+            for(const _x of _ins){ if(_x&&String(_x.alumno_id??'')===_m.lid){ _x.alumno_id=_m.sid; _ic=true } }
+            if(_ic) localStorage.setItem('atlos-inscripciones',JSON.stringify(_ins));
+          }
+        }catch(_e){ console.warn('[flush] alumno dependents storage',_e?.message||_e,_m.lid) }
+      } }
       else if(item.type==='pago') await api.crearPago(item.payload);
       else if(item.type==='checkin') await api.checkin(item.payload.alumno_id);
       else if(item.type==='clase') await flushClaseCrear(item);
