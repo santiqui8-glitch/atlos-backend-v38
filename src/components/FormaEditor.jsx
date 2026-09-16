@@ -95,14 +95,14 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     let pendiente=!navigator.onLine
     if(navigator.onLine){
       try{ const r=await api.crearRoutine(payload); serverId=(r&&(r.id??r._id??r.routine_id))||null }
-      catch(e){ console.warn('crearRoutine api fallo → encolada offline', e.message); if(esErrorDeRed(e)){ queuePush('routine',{...payload,_localId:localRoutineId}); pendiente=true } }
+      catch(e){ console.warn('crearRoutine api fallo', e.message); pendiente=true; if(esErrorDeRed(e)){ queuePush('routine',{...payload,_localId:localRoutineId}) } }
     } else {
       queuePush('routine',{...payload,_localId:localRoutineId})
     }
     // Limpiar representaciones locales anteriores de este alumno (filas UUID del editor viejo
     // o filas ya encoladas) para no acumular duplicados de la misma rutina.
     const old=await list('routines')
-    for(const r of old){ if(String(r.studentId)===String(student.id) && (r.via==='atlos-editor' || String(r.id).includes('-'))) await remove('routines', r.id) }
+    for(const r of old){ if(String(r.studentId)===String(student.id) && String(r.period??'')===String(period) && (r.via==='atlos-editor' || String(r.id).includes('-'))) await remove('routines', r.id) }
     const baseId=serverId||localRoutineId
     let i=0
     for(const d of [...s1,...s2,...s3,...s4]) for(const ex of d.exercises){

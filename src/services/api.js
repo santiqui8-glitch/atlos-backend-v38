@@ -162,8 +162,21 @@ async function flushRoutine(item){
   const lid=_localId
   if(!lid) return
   const sid=(r&&(r.id??r._id??r.routine_id))||null
+  if(!sid){
+    const rows0=await list('routines')
+    for(const row of rows0){ if(row.routineId===lid){ await put('routines',{...row, pending:false, serverId:row.serverId||null}) } }
+    return
+  }
+  const nsid=String(sid);
   const rows=await list('routines')
-  for(const row of rows){ if(row.routineId===lid){ await put('routines',{...row, id:row.id, pending:false, serverId:sid||row.serverId}) } }
+  for(const row of rows){
+    if(row.routineId!==lid) continue;
+    const oldId=String(row.id);
+    const suffix=oldId.startsWith(String(lid))? oldId.slice(String(lid).length) : '';
+    const nid=suffix? nsid+suffix : nsid+'#'+oldId;
+    await put('routines',{...row, id:nid, routineId:nsid, serverId:nsid, pending:false});
+    if(nid!==oldId) await remove('routines', row.id);
+  }
 }
 async function flushClaseCrear(item){
   const { _localId, ...body }=item.payload
