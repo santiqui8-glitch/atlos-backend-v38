@@ -22,6 +22,13 @@ export default function VistaProfesores({profesores,onNew,refresh}){
       const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
       localStorage.setItem('atlos-queue', JSON.stringify(q.filter(it=>!(it.type==='profesor' && String(it.payload._localId||it.payload.id)===String(selected.id)))))
     }
+    // BLOQUE 4O: cancelar updateProfesor pendiente del mismo profesor (evita PUT huérfano).
+    try{
+      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
+      const _ids=[selected.serverId,selected.id].filter(Boolean).map(String)
+      const _f=_q.filter(it=>!(it.type==='updateProfesor' && _ids.includes(String(it.payload?.id??''))))
+      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f))
+    }catch{}
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); localStorage.setItem('atlos-profesores',JSON.stringify(filt))
     try{ await remove('profesores',selected.id).catch(()=>{}); await remove('profesores',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('profesores',String(selected.serverId)).catch(()=>{}) }catch{}
     const del=JSON.parse(localStorage.getItem('atlos-deleted-profesores')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-profesores',JSON.stringify(del))
@@ -32,11 +39,12 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     e.preventDefault(); const f=new FormData(e.currentTarget); const nombre=f.get('nombre')?.trim(); const apellido=f.get('apellido')?.trim(); const telefono=f.get('telefono')?.trim(); const especialidad=f.get('especialidad')?.trim()||'General'; if(!nombre||!apellido) return alert('Nombre y apellido requeridos')
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const idx=arr.findIndex(x=>String(x.id)===String(edit.id))
     const updated={...(arr[idx]||edit), nombre, apellido, telefono, especialidad, nombreCompleto:`${nombre} ${apellido}`}
+    const prevRec=idx>=0?arr[idx]:null;
     if(idx>=0){ arr[idx]=updated; localStorage.setItem('atlos-profesores',JSON.stringify(arr)) }
     if(updated.serverId){
       // ENDPOINT ESPERADO: PUT /profesores/{id}. Primero la API; solo si falla la red se encola.
       try{ await api.actualizarProfesor(updated.serverId, {nombre, apellido, telefono, especialidad}) }
-      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}) }
+      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}); else if(prevRec){ try{ const _a=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const _i=_a.findIndex(x=>String(x.id)===String(edit.id)); if(_i>=0){ _a[_i]=prevRec; localStorage.setItem('atlos-profesores',JSON.stringify(_a)) } }catch{} } }
     }
     setEdit(null); refresh()
   }

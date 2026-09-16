@@ -244,7 +244,7 @@ export default function App(){
     let serverId=null; let pendiente=false
     if(navigator.onLine){
       try{ const r=await api.crearProfesor({nombre, apellido, telefono:telefono||'', especialidad}); serverId=(r&&(r.id??r._id))||null }
-      catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}); pendiente=true } }
+      catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}) } }
     } else { queuePush('profesor', {_localId:localId}); pendiente=true }
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
     arr.push(serverId ? {...localRec, id:String(serverId), serverId:String(serverId), pending:false} : {...localRec, pending:pendiente})
