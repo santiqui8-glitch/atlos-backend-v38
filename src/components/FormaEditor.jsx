@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { api, queuePush, esErrorDeRed } from '../services/api'
 import { list, put, remove } from '../services/db'
 
+// BLOQUE 4F: guard de doble submit para guardar rutina.
+let savingRutina=false;
+
 export default function FormaEditor({student,mode,library=[],routines=[],onClose}){
   const [period,setPeriod]=useState(new Date().toLocaleDateString('es-AR',{month:'long', year:'numeric'}))
   const [s1,setS1]=useState([])
@@ -73,8 +76,16 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     if(!period.trim()) return alert('Ingresá un período')
     if(!s1.length && !s2.length && !s3.length && !s4.length) return alert('Generá o armá al menos una rutina')
     for(const pl of [s1,s2,s3,s4]) for(const d of pl) if(!d.exercises.length) return alert('El '+d.name+' está vacío')
+    if(savingRutina) return; savingRutina=true; try{
     const _sId=String(student?.id??'').trim(); const _studentRef=_sId&&/^\d+$/.test(_sId)?Number(_sId):_sId||student?.id
     const payload={student_id:_studentRef, period, routine_a:[...s1,...s3], routine_b:[...s2,...s4]}
+    // BLOQUE 4F: coalescing — reemplazar routine pendiente del mismo alumno+período (como clases).
+    try{
+      const _cs=String(payload.student_id??''); const _cp=String(payload.period??'');
+      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+      const _f=_q.filter(it=>!(it.type==='routine' && String(it.payload?.student_id??'')===_cs && String(it.payload?.period??'')===_cp));
+      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+    }catch{}
     // Diseño unificado: una sola fuente por rutina.
     //  - Con red  -> se guarda por API y se refleja el UUID/id de respuesta en el caché local.
     //  - Sin red  -> se encola el alta (apuntando al mismo id local) y la copia local queda "pending"
@@ -99,6 +110,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     }
     try{ const { generarPDFRutina } = await import('../utils/pdf.js'); const doc=generarPDFRutina(student, period, s1,s2,s3,s4); doc.save(`Rutina-${student.name.replace(/\s+/g,'_')}-${period.replace(/\s+/g,'_')}.pdf`) }catch(e){ console.warn('pdf',e.message) }
     onClose(); setTimeout(()=>location.reload(), 400)
+  }finally{ savingRutina=false }
   }
   const sems=[['1',s1,'Semana 1'],['2',s2,'Semana 2'],['3',s3,'Semana 3'],['4',s4,'Semana 4']]
   return <div className='overlay' onMouseDown={e=>{if(e.target===e.currentTarget) onClose()}}><div className='modal' style={{width:'min(1440px,98vw)',maxHeight:'95vh',overflow:'auto',padding:0}}>

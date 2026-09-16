@@ -19,6 +19,9 @@ import VistaProfesores from './pages/VistaProfesores.jsx'
 import VistaPersonal from './pages/VistaPersonal.jsx'
 import VistaLicencias from './pages/VistaLicencias.jsx'
 
+// BLOQUE 4F: guards de doble submit (sin cambiar UI ni payloads).
+let savingClase=false;
+let savingProfesor=false;
 
 export default function App(){
   const [logged,setLogged]=useState(()=>localStorage.getItem('atlos-session')==='1' && isTokenValid())
@@ -209,14 +212,16 @@ export default function App(){
     return alum
   }
   const saveRoutine=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); await put('routines',{id:crypto.randomUUID(),studentId:f.get('studentId'),day:f.get('day'),exercise:f.get('exercise'),series:f.get('series'),reps:f.get('reps'),notes:f.get('notes')||''}); setModal(null); refresh() }
-  const saveClase=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={nombre:f.get('nombre'), dia_mes:f.get('dia')||'Lunes', hora_inicio:f.get('inicio')||'08:00', hora_fin:f.get('fin')||'09:00', capacidad: f.get('cap')==='Ilimitada'? 999 : Number(f.get('cap')||20), profesor:f.get('profesor')||''}
+  const saveClase=async(e)=>{ e.preventDefault(); if(savingClase) return; savingClase=true; try{
+    const f=new FormData(e.currentTarget); const data={nombre:f.get('nombre'), dia_mes:f.get('dia')||'Lunes', hora_inicio:f.get('inicio')||'08:00', hora_fin:f.get('fin')||'09:00', capacidad: f.get('cap')==='Ilimitada'? 999 : Number(f.get('cap')||20), profesor:f.get('profesor')||''}
     const localId='clase-'+Date.now(); let ok=false; let serverId=null; let pendiente=false
     if(navigator.onLine){
       try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}); pendiente=true } }
     } else { queuePush('clase',{...data,_localId:localId}); pendiente=true }
     if(!ok){ const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); localStorage.setItem('atlos-clases',JSON.stringify(local)) }
-    setModal(null); refresh() }
+    setModal(null); refresh() }finally{ savingClase=false } }
   const saveProfesor=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const nombre=f.get('nombre')?.trim(); const apellido=f.get('apellido')?.trim(); const telefono=f.get('telefono')?.trim(); const especialidad=f.get('especialidad')?.trim()||'General'; if(!nombre||!apellido) return alert('Nombre y apellido requeridos');
+    if(savingProfesor) return; savingProfesor=true; try{
     const localId=Date.now().toString(); const localRec={id:localId, nombre, apellido, telefono:telefono||'', especialidad, nombreCompleto:`${nombre} ${apellido}`}
     let serverId=null; let pendiente=false
     if(navigator.onLine){
@@ -225,7 +230,7 @@ export default function App(){
     } else { queuePush('profesor', {_localId:localId}); pendiente=true }
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
     arr.push(serverId ? {...localRec, id:String(serverId), serverId:String(serverId), pending:false} : {...localRec, pending:pendiente})
-    localStorage.setItem('atlos-profesores',JSON.stringify(arr)); setModal(null); refresh() }
+    localStorage.setItem('atlos-profesores',JSON.stringify(arr)); setModal(null); refresh() }finally{ savingProfesor=false } }
   const saveUsuario=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={usuario:f.get('usuario'), clave:f.get('clave'), rol:f.get('rol')||'Empleado'}; await api.crearUsuario(data); setModal(null); refresh() }
 
   const filtered=useMemo(()=> students.filter(s=>`${s.name} ${s.dni}`.toLowerCase().includes(query.toLowerCase())), [students,query])
