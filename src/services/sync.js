@@ -1,7 +1,8 @@
 import { api, flushQueue } from './api';
 import { list, put, bulkPut, normalizeKeys } from './db';
+import { tenantKey } from './tenant';
 
-const QUEUE_KEY = 'atlos-queue'
+const QUEUE_KEY = 'atlos-queue' // V39-04B: legacy/quarantine. Solo flushQueue la lee para avisar; nada la escribe.
 const SYNC_INTERVAL = 60000
 const LEGACY_TO_IDB = [
   ['atlos-clases', 'clases'],
@@ -17,13 +18,17 @@ let cleanupOnline = null
 let cleanupVisibility = null
 
 function readQueue() {
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[sync][queue] no tenant, read skipped') }catch{} return [] }
   try {
-    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]')
+    const q = JSON.parse(localStorage.getItem(key) || '[]')
     return Array.isArray(q) ? q : []
   } catch { return [] }
 }
 function writeQueue(q) {
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)) } catch {}
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[sync][queue] no tenant, write skipped') }catch{} return false }
+  try { localStorage.setItem(key, JSON.stringify(q)); return true } catch { return false }
 }
 
 // BLOQUE 4D: IDs eliminados por ID (nunca por nombre) para no reinsertar en IDB.

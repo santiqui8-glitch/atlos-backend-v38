@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
 import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -24,8 +24,8 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       catch(e){ console.warn('eliminar clase api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteClase',{id:targetId}) }
     } else if(selected.pending){
       // clase creada offline todavía sin id de servidor: cancelar su alta encolada
-      const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
-      localStorage.setItem('atlos-queue', JSON.stringify(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id)))))
+      const q=readTenantQueue()
+      if(q) writeTenantQueue(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id))))
     }
     const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const filt=local.filter(c=>String(c.id)!==String(selected.id)); localStorage.setItem('atlos-clases',JSON.stringify(filt))
     // BLOQUE 4P: cascada local — borrar inscripciones de la clase eliminada.
@@ -54,9 +54,11 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       catch(err){ console.warn('editar clase api',err.message); if(esErrorDeRed(err)) queuePush('updateClase',{id:targetId, ...data}); else updateRejected=true }
     } else if(edit.pending){
       // clase creada offline sin confirmar: pisar el payload encolado con los datos editados
-      const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
-      const q2=q.map(it=> (it.type==='clase' && String(it.payload._localId||it.payload.id)===String(edit.id)) ? {...it, payload:{...it.payload, ...data}} : it)
-      localStorage.setItem('atlos-queue',JSON.stringify(q2))
+      const q=readTenantQueue()
+      if(q){
+        const q2=q.map(it=> (it.type==='clase' && String(it.payload._localId||it.payload.id)===String(edit.id)) ? {...it, payload:{...it.payload, ...data}} : it)
+        writeTenantQueue(q2)
+      }
     }
     // BLOQUE 4N: si el backend rechazó el PUT, no persistir el override como válido.
     if(!updateRejected){

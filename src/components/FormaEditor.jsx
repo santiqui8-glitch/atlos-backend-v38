@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api, queuePush, esErrorDeRed } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
 import { list, put, remove } from '../services/db'
 
 // BLOQUE 4F: guard de doble submit para guardar rutina.
@@ -82,9 +82,11 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     // BLOQUE 4F: coalescing — reemplazar routine pendiente del mismo alumno+período (como clases).
     try{
       const _cs=String(payload.student_id??''); const _cp=String(payload.period??'');
-      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
-      const _f=_q.filter(it=>!(it.type==='routine' && String(it.payload?.student_id??'')===_cs && String(it.payload?.period??'')===_cp));
-      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+      const _q=readTenantQueue();
+      if(_q){
+        const _f=_q.filter(it=>!(it.type==='routine' && String(it.payload?.student_id??'')===_cs && String(it.payload?.period??'')===_cp));
+        if(_f.length!==_q.length) writeTenantQueue(_f);
+      }
     }catch{}
     // Diseño unificado: una sola fuente por rutina.
     //  - Con red  -> se guarda por API y se refleja el UUID/id de respuesta en el caché local.

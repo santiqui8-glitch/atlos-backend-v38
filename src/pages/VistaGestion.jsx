@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush } from '../services/api'
+import { api, queuePush, readTenantQueue, writeTenantQueue } from '../services/api'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -16,10 +16,12 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos',JSON.stringify(del))
     // BLOQUE 4K-B: cancelar create pendiente de este pago (evita fantasma en backend, como alumnos).
     try{
-      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
-      const _id=String(selected._localId||selected.id||'');
-      const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_id));
-      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+      const _q=readTenantQueue();
+      if(_q){
+        const _id=String(selected._localId||selected.id||'');
+        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_id));
+        if(_f.length!==_q.length) writeTenantQueue(_f);
+      }
     }catch{}
     await remove('payments',selected.id)
     setSel(null); refresh()
@@ -37,19 +39,21 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     const coalescePago=(patch,fechaMeta)=>{
       if(!_lid) return false;
       try{
-        const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+        const _q=readTenantQueue();
+        if(!_q) return false;
         let _hit=false;
         const _f=_q.map(it=>{ if(it.type==='pago'&&String(it.payload?._localId||'')===_lid){ _hit=true; const _np={...it.payload, ...patch}; const _ni={...it, payload:_np}; if(fechaMeta!==undefined) _ni.fecha=fechaMeta; return _ni } return it });
-        if(_hit) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+        if(_hit) writeTenantQueue(_f);
         return _hit;
       }catch{ return false }
     };
     const dropPendingPago=()=>{
       if(!_lid) return;
       try{
-        const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+        const _q=readTenantQueue();
+        if(!_q) return;
         const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_lid));
-        if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f));
+        if(_f.length!==_q.length) writeTenantQueue(_f);
       }catch{}
     };
     if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos', JSON.stringify(del)); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')){ const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}; if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO}) } } }

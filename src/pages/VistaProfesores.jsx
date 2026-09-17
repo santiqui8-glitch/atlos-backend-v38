@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
 import { remove } from '../services/db'
 import { onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -19,15 +19,17 @@ export default function VistaProfesores({profesores,onNew,refresh}){
       catch(e){ console.warn('borrar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteProfesor',{id:targetId}) }
     } else if(selected.pending){
       // profesor creado offline sin confirmar: cancelar su alta encolada
-      const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
-      localStorage.setItem('atlos-queue', JSON.stringify(q.filter(it=>!(it.type==='profesor' && String(it.payload._localId||it.payload.id)===String(selected.id)))))
+      const q=readTenantQueue()
+      if(q) writeTenantQueue(q.filter(it=>!(it.type==='profesor' && String(it.payload._localId||it.payload.id)===String(selected.id))))
     }
     // BLOQUE 4O: cancelar updateProfesor pendiente del mismo profesor (evita PUT huérfano).
     try{
-      const _q=JSON.parse(localStorage.getItem('atlos-queue')||'[]')
-      const _ids=[selected.serverId,selected.id].filter(Boolean).map(String)
-      const _f=_q.filter(it=>!(it.type==='updateProfesor' && _ids.includes(String(it.payload?.id??''))))
-      if(_f.length!==_q.length) localStorage.setItem('atlos-queue',JSON.stringify(_f))
+      const _q=readTenantQueue()
+      if(_q){
+        const _ids=[selected.serverId,selected.id].filter(Boolean).map(String)
+        const _f=_q.filter(it=>!(it.type==='updateProfesor' && _ids.includes(String(it.payload?.id??''))))
+        if(_f.length!==_q.length) writeTenantQueue(_f)
+      }
     }catch{}
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); localStorage.setItem('atlos-profesores',JSON.stringify(filt))
     try{ await remove('profesores',selected.id).catch(()=>{}); await remove('profesores',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('profesores',String(selected.serverId)).catch(()=>{}) }catch{}

@@ -1,4 +1,5 @@
 import { list, put, remove } from './db';
+import { getCurrentTenant, tenantKey } from './tenant';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://atlos-api-production.up.railway.app';
 
@@ -106,7 +107,26 @@ export function getRole(){ try{ const tok=getToken(); if(!tok) return null; cons
 // BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
 let flushing=false;
 let pushDuringFlush=false;
-export function queuePush(type,payload,extra){ try{ const q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); q.push({type,payload,ts:Date.now(),...(extra&&typeof extra==='object'?extra:{})}); localStorage.setItem('atlos-queue', JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) } }
+export function queuePush(type,payload,extra){
+  const tenant=getCurrentTenant();
+  if(!tenant){ try{ console.warn('[queuePush] no tenant, item not queued',type) }catch{} return }
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[queuePush] no tenant key, item not queued',type) }catch{} return }
+  try{ const q=JSON.parse(localStorage.getItem(key)||'[]'); q.push({gymId:tenant,type,payload,ts:Date.now(),...(extra&&typeof extra==='object'?extra:{})}); localStorage.setItem(key, JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) }
+}
+
+// V39-04B: acceso único a la queue del tenant (fail-closed: null si no hay tenant
+// o la lectura falla; nunca lee/escribe la queue global legacy).
+export function readTenantQueue(){
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[queue] no tenant, read skipped') }catch{} return null }
+  try{ const q=JSON.parse(localStorage.getItem(key)||'[]'); return Array.isArray(q)?q:[] }catch(err){ console.warn('[queue] read failed',err?.message||err); return null }
+}
+export function writeTenantQueue(q){
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[queue] no tenant, write skipped') }catch{} return false }
+  try{ localStorage.setItem(key,JSON.stringify(q)); return true }catch(err){ console.warn('[queue] write failed',err?.message||err); return false }
+}
 
 // BLOQUE 4J-B: remapea referencias UUID → sid en items de cola (mismo objeto, sin cambiar formato).
 function remapPendingAlumno(items, lid, sid){
@@ -203,19 +223,37 @@ async function flushClaseCrear(item){
 
 export async function flushQueue(){
   if(flushing){ try{ console.warn('[flush] skipped concurrent execution') }catch{} return }
+  // V39-04B: solo la queue del tenant vigente. Legacy global = quarantine (solo aviso).
+  const tenant=getCurrentTenant();
+  if(!tenant){ try{ console.warn('[flush] no tenant, skipped (no global flush)') }catch{} return }
+  const key=tenantKey('queue');
+  if(!key){ try{ console.warn('[flush] no tenant key, skipped') }catch{} return }
+  try{
+    const legacy=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
+    if(Array.isArray(legacy)&&legacy.length) console.warn('[flush] legacy queue quarantined',legacy.length,'items in atlos-queue (not processed)');
+  }catch{}
   flushing=true; pushDuringFlush=false;
   try{
-  let q=null;
-  try{ q=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); if(!Array.isArray(q)) q=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
-  if(!q.length) return;
+  let qAll=null;
+  try{ qAll=JSON.parse(localStorage.getItem(key)||'[]'); if(!Array.isArray(qAll)) qAll=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
+  if(!qAll.length) return;
+  const own=[], kept=[];
+  let nLegacy=0, nForeign=0;
+  for(const it of qAll){
+    const g=it&&typeof it==='object'?String(it.gymId??''):'';
+    if(g===tenant) own.push(it);
+    else { kept.push(it); if(!g) nLegacy++; else nForeign++; }
+  }
+  if(nLegacy||nForeign){ try{ console.warn('[flush] non-tenant items kept',nLegacy,'legacy',nForeign,'foreign') }catch{} }
   const remain=[];
-  for(const item of q){
+  for(const item of own){
     try{
-      if(item.type==='alumno'){ const _m=await flushAlumnoCrear(item); if(_m){ remapPendingAlumno(q,_m.lid,_m.sid);
+      if(item.type==='alumno'){ const _m=await flushAlumnoCrear(item); if(_m){ remapPendingAlumno(own,_m.lid,_m.sid);
         // BLOQUE 4J-B: misma migración en storage + inscripciones (bloque síncrono, sin await entremedio).
+        // V39-04B: se usa la clave snapshot del flush (no se re-deriva el tenant).
         try{
-          const _cq=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
-          if(Array.isArray(_cq)&&remapPendingAlumno(_cq,_m.lid,_m.sid)) localStorage.setItem('atlos-queue',JSON.stringify(_cq));
+          const _cq=JSON.parse(localStorage.getItem(key)||'[]');
+          if(Array.isArray(_cq)&&remapPendingAlumno(_cq,_m.lid,_m.sid)) localStorage.setItem(key,JSON.stringify(_cq));
           const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
           if(Array.isArray(_ins)){
             let _ic=false;
@@ -237,20 +275,21 @@ export async function flushQueue(){
     }catch(e){ const _pl=item.payload||{}; const _ref=_pl._localId||_pl.id||_pl.alumno_id||''; try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} remain.push(item) }
   }
   // BLOQUE 4C: preservar operaciones agregadas durante el flush (multiset por JSON para no perder duplicados idénticos).
+  // V39-04B: relectura y escritura sobre la clave snapshot del flush.
   let finalRemain=remain;
   if(pushDuringFlush){
     let current=null;
-    try{ current=JSON.parse(localStorage.getItem('atlos-queue')||'[]'); if(!Array.isArray(current)) current=null }catch(err){ console.error('[flush] reread failed, keeping remain only',err?.message||err); current=null }
+    try{ current=JSON.parse(localStorage.getItem(key)||'[]'); if(!Array.isArray(current)) current=null }catch(err){ console.error('[flush] reread failed, keeping remain only',err?.message||err); current=null }
     if(current){
       const counts=new Map();
-      for(const it of q){ const k=JSON.stringify(it); counts.set(k,(counts.get(k)||0)+1) }
+      for(const it of qAll){ const k=JSON.stringify(it); counts.set(k,(counts.get(k)||0)+1) }
       const extra=[];
       for(const it of current){ const k=JSON.stringify(it); const n=counts.get(k)||0; if(n>0) counts.set(k,n-1); else extra.push(it) }
       if(extra.length){ try{ console.warn('[flush] preserved',extra.length,'queued during flush') }catch{} }
-      finalRemain=[...remain, ...extra];
-    }
-  }
-  try{ localStorage.setItem('atlos-queue', JSON.stringify(finalRemain)) }catch(err){ console.error('[flush] persist failed, queue kept on storage',err?.message||err); return }
-  if(finalRemain.length!==q.length || pushDuringFlush) window.dispatchEvent(new Event('atlos-queue-flushed'))
+      finalRemain=[...remain, ...kept, ...extra];
+    } else finalRemain=[...remain, ...kept];
+  } else if(kept.length) finalRemain=[...remain, ...kept];
+  try{ localStorage.setItem(key, JSON.stringify(finalRemain)) }catch(err){ console.error('[flush] persist failed, queue kept on storage',err?.message||err); return }
+  if(finalRemain.length!==qAll.length || pushDuringFlush) window.dispatchEvent(new Event('atlos-queue-flushed'))
   }finally{ flushing=false; pushDuringFlush=false }
 }
