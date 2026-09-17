@@ -346,6 +346,50 @@ function backoffDelay(attempts, retryAfterMs){
 }
 const FLUSH_OPTS={timeout:FLUSH_TIMEOUT_MS};
 
+// V39-09B-2: mutex cross-tab en localStorage, namespace por tenant:
+// `atlos:{TENANT}:flush-lock` = {owner, exp}. El timestamp de expiración evita
+// deadlocks si la pestaña muere sin liberar; `owner` evita que una pestaña
+// libere el lock de otra. Heartbeat por iteración del flush.
+const FLUSH_LOCK_TTL_MS=30000;
+function acquireFlushLock(lockKey){
+  if(!lockKey) return null;
+  const now=Date.now();
+  try{
+    const raw=localStorage.getItem(lockKey);
+    if(raw!=null){
+      try{
+        const cur=JSON.parse(raw);
+        if(cur&&typeof cur==='object'&&typeof cur.exp==='number'&&cur.exp>now&&typeof cur.owner==='string'&&cur.owner) return null;
+      }catch{}
+    }
+  }catch{ return null }
+  let owner=null;
+  try{ owner=crypto.randomUUID() }catch{ owner='lock-'+now+'-'+Math.random().toString(36).slice(2) }
+  if(!owner) return null;
+  try{ localStorage.setItem(lockKey, JSON.stringify({owner, exp:now+FLUSH_LOCK_TTL_MS})) }catch{ return null }
+  try{
+    const back=JSON.parse(localStorage.getItem(lockKey)||'null');
+    if(back&&back.owner===owner) return owner;
+  }catch{}
+  return null;
+}
+function touchFlushLock(lockKey,owner){
+  if(!lockKey||!owner) return false;
+  try{
+    const cur=JSON.parse(localStorage.getItem(lockKey)||'null');
+    if(!cur||cur.owner!==owner) return false;
+    localStorage.setItem(lockKey, JSON.stringify({owner, exp:Date.now()+FLUSH_LOCK_TTL_MS}));
+    return true;
+  }catch{ return false }
+}
+function releaseFlushLock(lockKey,owner){
+  if(!lockKey||!owner) return;
+  try{
+    const cur=JSON.parse(localStorage.getItem(lockKey)||'null');
+    if(cur&&cur.owner===owner) localStorage.removeItem(lockKey);
+  }catch{}
+}
+
 export async function flushQueue(){
   if(flushing){ try{ console.warn('[flush] skipped concurrent execution') }catch{} return }
   // V39-04B: solo la queue del tenant vigente. Legacy global = quarantine (solo aviso).
@@ -357,11 +401,16 @@ export async function flushQueue(){
     const legacy=JSON.parse(localStorage.getItem('atlos-queue')||'[]');
     if(Array.isArray(legacy)&&legacy.length) console.warn('[flush] legacy queue quarantined',legacy.length,'items in atlos-queue (not processed)');
   }catch{}
-  flushing=true; pushDuringFlush=false;
   // V39-07B: contexto del flush (tenant+usuario+sesión). Sin identidad completa no se procesa.
-  // (Antes del try/finally para no retener el mutex en la salida temprana.)
+  // (Antes de adquirir el lock para no retenerlo en la salida temprana.)
   const ctx0=readContext();
-  if(!ctx0.user||!ctx0.session){ try{ console.warn('[flush] no identity, skipped') }catch{} flushing=false; return }
+  if(!ctx0.user||!ctx0.session){ try{ console.warn('[flush] no identity, skipped') }catch{} return }
+  // V39-09B-2: exclusión mutua cross-tab por tenant. Si otra pestaña tiene el
+  // lock vigente, abortar silenciosamente (sin requests ni cambios de estado).
+  const lockKey=tenantKey('flush-lock');
+  const lockOwner=acquireFlushLock(lockKey);
+  if(!lockOwner){ try{ console.warn('[flush] lock held by another tab, skipping') }catch{} return }
+  flushing=true; pushDuringFlush=false;
   try{
   let qAll=null;
   try{ qAll=JSON.parse(localStorage.getItem(key)||'[]'); if(!Array.isArray(qAll)) qAll=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
@@ -387,6 +436,13 @@ export async function flushQueue(){
     const ctx=readContext();
     if(ctx.tenant!==ctx0.tenant||ctx.user!==ctx0.user||ctx.session!==ctx0.session){
       try{ console.warn('[flush] context drift, stopping') }catch{}
+      for(let j=idx;j<own.length;j++) remain.push(own[j]);
+      drifted=true; break;
+    }
+    // V39-09B-2: heartbeat del lock; si otra pestaña lo tomó (o expiró y fue
+    // robado), detener fail-closed conservando lo pendiente en remain.
+    if(!touchFlushLock(lockKey,lockOwner)){
+      try{ console.warn('[flush] lock lost, stopping') }catch{}
       for(let j=idx;j<own.length;j++) remain.push(own[j]);
       drifted=true; break;
     }
@@ -500,5 +556,5 @@ export async function flushQueue(){
   } else if(kept.length) finalRemain=[...remain, ...kept];
   try{ localStorage.setItem(key, JSON.stringify(finalRemain)) }catch(err){ console.error('[flush] persist failed, queue kept on storage',err?.message||err); return }
   if(finalRemain.length!==qAll.length || pushDuringFlush) window.dispatchEvent(new Event('atlos-queue-flushed'))
-  }finally{ flushing=false; pushDuringFlush=false }
+  }finally{ releaseFlushLock(lockKey,lockOwner); flushing=false; pushDuringFlush=false }
 }
