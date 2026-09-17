@@ -21,7 +21,7 @@ export function esErrorDeRed(e){
   return /failed to fetch|networkerror|load failed|timed out|aborted|network request/i.test(m)
 }
 
-async function request(path,{method='GET',body,auth=true}={}){
+async function request(path,{method='GET',body,auth=true,timeout=0}={}){
   const headers={'Content-Type':'application/json'};
   const tok=getToken(); 
   if(auth && tok) headers['Authorization']=`Bearer ${tok}`;
@@ -29,11 +29,17 @@ async function request(path,{method='GET',body,auth=true}={}){
   const hwid=getGymHWID(); 
   if(hwid) headers['X-HWID']=hwid; // Enviamos HWID siempre para identificación
   
-  const res=await fetch(`${API_URL}${path}`,{method,headers,body:body?JSON.stringify(body):undefined});
+  // V39-08B: timeout solo cuando el llamador lo pide (flush). Sin timeout el
+  // comportamiento es idéntico al anterior (requests de UI intactas).
+  const ctrl=(timeout>0 && typeof AbortController!=='undefined')?new AbortController():null;
+  let timer=null;
+  if(ctrl){ try{ timer=setTimeout(()=>{ try{ctrl.abort()}catch{} },timeout) }catch{} }
+  try{
+  const res=await fetch(`${API_URL}${path}`,{method,headers,body:body?JSON.stringify(body):undefined,signal:ctrl?ctrl.signal:undefined});
   
   if(!res.ok){
     const t=await res.text(); let msg=t; try{ const j=JSON.parse(t); msg=j.detail||j.message||j.msg||t }catch{}
-    const mkErr=(m)=>{ const e=new Error(m); e.status=res.status; e.body=t; return e };
+    const mkErr=(m)=>{ const e=new Error(m); e.status=res.status; e.body=t; try{ e.retryAfter=res.headers.get('retry-after') }catch{} return e };
     if(res.status===401){ 
       if(auth) clearAuth(); 
       throw mkErr(msg||'No autorizado') 
@@ -41,7 +47,14 @@ async function request(path,{method='GET',body,auth=true}={}){
     if(res.status===403) throw mkErr(msg||'Acceso denegado');
     throw mkErr(msg||`Error ${res.status}`);
   }
-  const ct=res.headers.get('content-type')||''; if(ct.includes('application/json')) return res.json(); return res.text();
+  const ct=res.headers.get('content-type')||'';
+  // V39-08B: un 2xx manda por status. Si el body no es JSON válido, se devuelve
+  // el texto en lugar de convertir el éxito en error (evita duplicar el envío).
+  if(!ct.includes('application/json')) return res.text();
+  const t=await res.text();
+  if(!t) return null;
+  try{ return JSON.parse(t) }catch{ return t }
+  }finally{ if(timer){ try{ clearTimeout(timer) }catch{} } }
 }
 
 export const api={
@@ -49,7 +62,7 @@ export const api={
   me:()=>request('/auth/me'),
   alumnos:()=>request('/alumnos'),
   alumno:(id)=>request(`/alumnos/${id}`),
-  crearAlumno:(data)=>request('/alumnos',{method:'POST',body:data}),
+  crearAlumno:(data,opts)=>request('/alumnos',{method:'POST',body:data,...(opts||{})}),
   actualizarAlumno:(id,data)=>request(`/alumnos/${id}`,{method:'PUT',body:data}),
   eliminarAlumno:(id)=>request(`/alumnos/${id}`,{method:'DELETE'}),
   ejercicios:(params)=>request('/ejercicios'+(params?`?${new URLSearchParams(params)}`:'')),
@@ -57,14 +70,14 @@ export const api={
   crearEjerciciosLote:(arr)=>request('/ejercicios/lote',{method:'POST',body:arr}),
   eliminarEjercicio:(id)=>request(`/ejercicios/${id}`,{method:'DELETE'}),
   pagos:(params)=>request('/pagos'+(params?`?${new URLSearchParams(params)}`:'')),
-  crearPago:(data)=>request('/pagos',{method:'POST',body:data}),
+  crearPago:(data,opts)=>request('/pagos',{method:'POST',body:data,...(opts||{})}),
   asistencia:(params)=>request('/asistencia'+(params?`?${new URLSearchParams(params)}`:'')),
-  checkin:(alumno_id)=>request('/asistencia/checkin',{method:'POST',body:{alumno_id}}),
+  checkin:(alumno_id,opts)=>request('/asistencia/checkin',{method:'POST',body:{alumno_id},...(opts||{})}),
   checkout:(alumno_id)=>request('/asistencia/checkout',{method:'POST',body:{alumno_id}}),
   clases:()=>request('/clases'),
-  crearClase:(data)=>request('/clases',{method:'POST',body:data}),
-  actualizarClase:(id,data)=>request(`/clases/${id}`,{method:'PUT',body:data}),
-  eliminarClase:(id)=>request(`/clases/${id}`,{method:'DELETE'}),
+  crearClase:(data,opts)=>request('/clases',{method:'POST',body:data,...(opts||{})}),
+  actualizarClase:(id,data,opts)=>request(`/clases/${id}`,{method:'PUT',body:data,...(opts||{})}),
+  eliminarClase:(id,opts)=>request(`/clases/${id}`,{method:'DELETE',...(opts||{})}),
   claseAlumnos:(id)=>request(`/clases/${id}/alumnos`),
   inscribirClase:(clase_id,alumno_id)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id}}),
   cuotas:(params)=>request('/cuotas'+(params?`?${new URLSearchParams(params)}`:'')),
@@ -74,14 +87,14 @@ export const api={
   // CORRECCIÓN FINAL: Rutas en inglés para coincidir con Backend V38
   routines:(params)=>request('/routines'+(params?`?${new URLSearchParams(params)}`:'')),
   routineLatest:(sid)=>request(`/routines/${sid}/latest`),
-  crearRoutine:(data)=>request('/routines',{method:'POST',body:data}),
+  crearRoutine:(data,opts)=>request('/routines',{method:'POST',body:data,...(opts||{})}),
   borrarRoutine:(id)=>request(`/routines/${id}`,{method:'DELETE'}),
   
   // Profesores: CRUD REST de ATLOS.
   profesores:()=>request('/profesores'),
-  crearProfesor:(data)=>request('/profesores',{method:'POST',body:data}),
-  actualizarProfesor:(id,data)=>request(`/profesores/${id}`,{method:'PUT',body:data}),
-  borrarProfesor:(id)=>request(`/profesores/${id}`,{method:'DELETE'}),
+  crearProfesor:(data,opts)=>request('/profesores',{method:'POST',body:data,...(opts||{})}),
+  actualizarProfesor:(id,data,opts)=>request(`/profesores/${id}`,{method:'PUT',body:data,...(opts||{})}),
+  borrarProfesor:(id,opts)=>request(`/profesores/${id}`,{method:'DELETE',...(opts||{})}),
   
   syncVersion:()=>request('/sync/version'),
   backup:()=>request('/backup',{method:'POST'}),
@@ -188,7 +201,7 @@ function remapPendingAlumno(items, lid, sid){
 
 async function flushAlumnoCrear(item){
   const { _localId, ...body }=(item.payload||{});
-  const r=await api.crearAlumno(body);
+  const r=await api.crearAlumno(body,FLUSH_OPTS);
   const lid=_localId?String(_localId):null;
   if(!lid) return null;
   const sid=(r&&(r.id??r._id))||null;
@@ -216,7 +229,7 @@ async function flushProfesorCrear(item){
   const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
   const rec=arr.find(x=>String(x.id)===lid)
   if(!rec) throw new Error('profesor local no encontrado para sincronizar')
-  const r=await api.crearProfesor({nombre:rec.nombre, apellido:rec.apellido, telefono:rec.telefono||'', especialidad:rec.especialidad||'General'})
+  const r=await api.crearProfesor({nombre:rec.nombre, apellido:rec.apellido, telefono:rec.telefono||'', especialidad:rec.especialidad||'General'},FLUSH_OPTS)
   const sid=(r&&(r.id??r._id))||null
   const idx=arr.findIndex(x=>String(x.id)===lid)
   if(idx>=0){ arr[idx]={...rec, id: sid?String(sid):lid, serverId: sid?String(sid):rec.serverId, pending:false} }
@@ -224,7 +237,7 @@ async function flushProfesorCrear(item){
 }
 async function flushRoutine(item){
   const { _localId, ...body }=item.payload
-  const r=await api.crearRoutine(body)
+  const r=await api.crearRoutine(body,FLUSH_OPTS)
   const lid=_localId
   if(!lid) return
   const sid=(r&&(r.id??r._id??r.routine_id))||null
@@ -246,7 +259,7 @@ async function flushRoutine(item){
 }
 async function flushClaseCrear(item){
   const { _localId, ...body }=item.payload
-  const r=await api.crearClase(body)
+  const r=await api.crearClase(body,FLUSH_OPTS)
   const lid=_localId
   if(!lid) return
   const sid=(r&&(r.id??r._id))||null
@@ -267,6 +280,41 @@ async function flushClaseCrear(item){
   }
 }
 
+// V39-08B: clasificación central y determinista de errores de cola.
+// SUCCESS se resuelve en el llamador (2xx no lanza). El resto:
+// - 'RETRYABLE': transitorio, permanece con backoff.
+// - 'TERMINAL': definitivo (400/403/404/422 y otros 4xx), dead-letter sin reenvío.
+// - 'CONFLICT': 409, backend-dependiente: se conserva sin reenvío automático.
+// - 'AUTH_BLOCKED': 401, se conserva; clearAuth() ya corrió en request().
+export function classifyQueueError(err){
+  const status=err&&typeof err.status==='number'?err.status:null;
+  if(status===401) return 'AUTH_BLOCKED';
+  if(status===409) return 'CONFLICT';
+  if(status===400||status===403||status===404||status===422) return 'TERMINAL';
+  if(status===408||status===429) return 'RETRYABLE';
+  if(status!=null&&status>=400&&status<500) return 'TERMINAL';
+  return 'RETRYABLE';
+}
+// V39-08B: Retry-After en segundos o fecha HTTP → ms. null si ausente/inválido.
+function parseRetryAfterMs(v){
+  if(v==null) return null;
+  if(typeof v==='number'&&isFinite(v)&&v>=0) return v*1000;
+  const s=String(v).trim();
+  if(!s) return null;
+  if(/^\d+$/.test(s)) return Number(s)*1000;
+  const t=Date.parse(s);
+  if(!isNaN(t)){ const d=t-Date.now(); return d>0?d:null }
+  return null;
+}
+const FLUSH_TIMEOUT_MS=30000;
+const RETRY_BASE_MS=60000, RETRY_CAP_MS=15*60000, RETRY_AFTER_CAP_MS=30*60000;
+function backoffDelay(attempts, retryAfterMs){
+  if(typeof retryAfterMs==='number'&&retryAfterMs>0) return Math.min(retryAfterMs,RETRY_AFTER_CAP_MS);
+  const d=RETRY_BASE_MS*Math.pow(2,Math.max(0,(attempts||1)-1));
+  return Math.min(d,RETRY_CAP_MS);
+}
+const FLUSH_OPTS={timeout:FLUSH_TIMEOUT_MS};
+
 export async function flushQueue(){
   if(flushing){ try{ console.warn('[flush] skipped concurrent execution') }catch{} return }
   // V39-04B: solo la queue del tenant vigente. Legacy global = quarantine (solo aviso).
@@ -280,8 +328,9 @@ export async function flushQueue(){
   }catch{}
   flushing=true; pushDuringFlush=false;
   // V39-07B: contexto del flush (tenant+usuario+sesión). Sin identidad completa no se procesa.
+  // (Antes del try/finally para no retener el mutex en la salida temprana.)
   const ctx0=readContext();
-  if(!ctx0.user||!ctx0.session){ try{ console.warn('[flush] no identity, skipped') }catch{} return }
+  if(!ctx0.user||!ctx0.session){ try{ console.warn('[flush] no identity, skipped') }catch{} flushing=false; return }
   try{
   let qAll=null;
   try{ qAll=JSON.parse(localStorage.getItem(key)||'[]'); if(!Array.isArray(qAll)) qAll=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
@@ -309,6 +358,10 @@ export async function flushQueue(){
     if(String(item?.userId??'')!==ctx.user||String(item?.sessionId??'')!==ctx.session){
       nSkipped++; remain.push(item); continue;
     }
+    // V39-08B: terminal/conflict no se reenvían; backoff respeta nextRetryAt.
+    // Todo queda persistido en remain (dead-letter visible, nunca silencioso).
+    if(item.state==='terminal'||item.state==='conflict'){ remain.push(item); continue; }
+    if(typeof item.nextRetryAt==='number'&&item.nextRetryAt>Date.now()){ remain.push(item); continue; }
     try{
       if(item.type==='alumno'){ const _m=await flushAlumnoCrear(item); if(_m){ remapPendingAlumno(own,_m.lid,_m.sid);
         // BLOQUE 4J-B: misma migración en storage + inscripciones (bloque síncrono, sin await entremedio).
@@ -324,17 +377,31 @@ export async function flushQueue(){
           }
         }catch(_e){ console.warn('[flush] alumno dependents storage',_e?.message||_e,_m.lid) }
       } }
-      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody); }
-      else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
+      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody,FLUSH_OPTS); }
+      else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id,FLUSH_OPTS); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
       else if(item.type==='clase') await flushClaseCrear(item);
-      else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id);
-      else if(item.type==='updateClase') await api.actualizarClase(item.payload.id,{nombre:item.payload.nombre,dia_mes:item.payload.dia_mes,hora_inicio:item.payload.hora_inicio,hora_fin:item.payload.hora_fin,capacidad:item.payload.capacidad,profesor:item.payload.profesor});
+      else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id,FLUSH_OPTS);
+      else if(item.type==='updateClase') await api.actualizarClase(item.payload.id,{nombre:item.payload.nombre,dia_mes:item.payload.dia_mes,hora_inicio:item.payload.hora_inicio,hora_fin:item.payload.hora_fin,capacidad:item.payload.capacidad,profesor:item.payload.profesor},FLUSH_OPTS);
       else if(item.type==='routine') await flushRoutine(item);
       else if(item.type==='profesor') await flushProfesorCrear(item);
-      else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad});
-      else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id);
+      else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad},FLUSH_OPTS);
+      else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id,FLUSH_OPTS);
       else remain.push(item);
-    }catch(e){ const _pl=item.payload||{}; const _ref=_pl._localId||_pl.id||_pl.alumno_id||''; try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} remain.push(item) }
+    }catch(e){
+      const _pl=item.payload||{};
+      const _ref=_pl._localId||_pl.id||_pl.alumno_id||'';
+      const _cls=classifyQueueError(e);
+      item.attempts=(Number(item.attempts)||0)+1;
+      try{ item.lastError={status:(e&&typeof e.status==='number'?e.status:null), message:String((e&&e.message)||e||'').slice(0,300), at:Date.now()} }catch{}
+      if(_cls==='TERMINAL'){ item.state='terminal'; try{ console.warn('[flush] terminal, kept without retry',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} }
+      else if(_cls==='CONFLICT'){ item.state='conflict'; try{ console.warn('[flush] conflict, kept without retry',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} }
+      else {
+        if(_cls==='AUTH_BLOCKED'){ try{ console.warn('[flush] auth blocked, kept',item.type,_ref) }catch{} }
+        else { try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} }
+        item.nextRetryAt=Date.now()+backoffDelay(item.attempts,parseRetryAfterMs(e&&e.retryAfter));
+      }
+      remain.push(item);
+    }
   }
   if(nSkipped){ try{ console.warn('[flush] identity-quarantined items kept',nSkipped) }catch{} }
   // BLOQUE 4C: preservar operaciones agregadas durante el flush (multiset por JSON para no perder duplicados idénticos).
