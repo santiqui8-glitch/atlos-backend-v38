@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
 import { list, put, remove } from '../services/db'
 
 // BLOQUE 4F: guard de doble submit para guardar rutina.
@@ -84,7 +84,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
       const _cs=String(payload.student_id??''); const _cp=String(payload.period??'');
       const _q=readTenantQueue();
       if(_q){
-        const _f=_q.filter(it=>!(it.type==='routine' && String(it.payload?.student_id??'')===_cs && String(it.payload?.period??'')===_cp));
+        const _f=_q.filter(it=>!(it.type==='routine' && String(it.payload?.student_id??'')===_cs && String(it.payload?.period??'')===_cp && sameQueueContext(it)));
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }
     }catch{}

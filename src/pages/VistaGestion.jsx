@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, readTenantQueue, writeTenantQueue } from '../services/api'
+import { api, queuePush, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
 import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
@@ -20,7 +20,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
       const _q=readTenantQueue();
       if(_q){
         const _id=String(selected._localId||selected.id||'');
-        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_id));
+        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_id && sameQueueContext(it)));
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }
     }catch{}
@@ -43,7 +43,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
         const _q=readTenantQueue();
         if(!_q) return false;
         let _hit=false;
-        const _f=_q.map(it=>{ if(it.type==='pago'&&String(it.payload?._localId||'')===_lid){ _hit=true; const _np={...it.payload, ...patch}; const _ni={...it, payload:_np}; if(fechaMeta!==undefined) _ni.fecha=fechaMeta; return _ni } return it });
+        const _f=_q.map(it=>{ if(it.type==='pago'&&String(it.payload?._localId||'')===_lid && sameQueueContext(it)){ _hit=true; const _np={...it.payload, ...patch}; const _ni={...it, payload:_np}; if(fechaMeta!==undefined) _ni.fecha=fechaMeta; return _ni } return it });
         if(_hit) writeTenantQueue(_f);
         return _hit;
       }catch{ return false }
@@ -53,7 +53,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
       try{
         const _q=readTenantQueue();
         if(!_q) return;
-        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_lid));
+        const _f=_q.filter(it=>!(it.type==='pago'&&String(it.payload?._localId||'')===_lid && sameQueueContext(it)));
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }catch{}
     };

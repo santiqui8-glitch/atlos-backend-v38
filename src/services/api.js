@@ -101,7 +101,7 @@ export const api={
 };
 
 export function setToken(t){ if(t) localStorage.setItem('atlos-token',t); else localStorage.removeItem('atlos-token'); }
-export function clearAuth(){ localStorage.removeItem('atlos-token'); localStorage.removeItem('atlos-session'); localStorage.removeItem('atlos-rol'); localStorage.removeItem('atlos-usuario'); }
+export function clearAuth(){ localStorage.removeItem('atlos-token'); localStorage.removeItem('atlos-session'); localStorage.removeItem('atlos-rol'); localStorage.removeItem('atlos-usuario'); try{ localStorage.removeItem('atlos-sid') }catch{} }
 export function isTokenValid(){ try{ const tok=getToken(); if(!tok) return false; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return false; return true }catch{ return false } }
 export function getRole(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.rol||p.role||null; }catch{ return null } }
 // BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
@@ -109,10 +109,56 @@ let flushing=false;
 let pushDuringFlush=false;
 export function queuePush(type,payload,extra){
   const tenant=getCurrentTenant();
-  if(!tenant){ try{ console.warn('[queuePush] no tenant, item not queued',type) }catch{} return }
+  const user=getCurrentUserId();
+  const session=getCurrentSessionId();
+  if(!tenant||!user||!session){ try{ console.warn('[queuePush] no identity, item not queued',type) }catch{} return }
   const key=tenantKey('queue');
   if(!key){ try{ console.warn('[queuePush] no tenant key, item not queued',type) }catch{} return }
-  try{ const q=JSON.parse(localStorage.getItem(key)||'[]'); q.push({gymId:tenant,type,payload,ts:Date.now(),...(extra&&typeof extra==='object'?extra:{})}); localStorage.setItem(key, JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) }
+  let opId=null;
+  try{ opId=crypto.randomUUID() }catch(err){ console.warn('[queuePush] no operationId, item not queued',type); return }
+  try{ const q=JSON.parse(localStorage.getItem(key)||'[]'); q.push({gymId:tenant,userId:user,sessionId:session,operationId:opId,type,payload,ts:Date.now(),...(extra&&typeof extra==='object'?extra:{})}); localStorage.setItem(key, JSON.stringify(q)); if(flushing) pushDuringFlush=true }catch(err){ console.warn('[queuePush]',type,err?.message||err) }
+}
+
+// V39-07B: identidad de usuario/sesión (metadatos locales, jamás viajan al backend).
+// userId = 'atlos-usuario' (identidad existente, no sensible). sessionId = 'atlos-sid'
+// creado en login e invalidado en clearAuth/logout.
+export function getCurrentUserId(){
+  try{
+    const u=localStorage.getItem('atlos-usuario');
+    const s=u==null?'':String(u).trim();
+    return s||null;
+  }catch{ return null }
+}
+export function getCurrentSessionId(){
+  try{ const s=localStorage.getItem('atlos-sid'); return s||null }catch{ return null }
+}
+export function startSession(){
+  try{ const sid=crypto.randomUUID(); localStorage.setItem('atlos-sid',sid); return sid }catch{ return null }
+}
+function readContext(){
+  return {tenant:getCurrentTenant(), user:getCurrentUserId(), session:getCurrentSessionId()};
+}
+// true solo si el item pertenece al contexto vigente (misma sesión del mismo usuario).
+// Legacy sin identidad nunca matchea: queda en cuarentena.
+export function sameQueueContext(it){
+  const c=readContext();
+  if(!c.tenant||!c.user||!c.session) return false;
+  if(!it||typeof it!=='object') return false;
+  return String(it.userId??'')===c.user && String(it.sessionId??'')===c.session;
+}
+// V39-07B: al iniciar sesión, los items del propio usuario/tenant adoptan la
+// sesión nueva (misma persona, mismo gym). Ajenos y legacy quedan intactos.
+export function adoptOwnQueueItems(){
+  const c=readContext();
+  if(!c.tenant||!c.user||!c.session) return 0;
+  const q=readTenantQueue();
+  if(!q) return 0;
+  let n=0;
+  for(const it of q){
+    if(it&&typeof it==='object'&&String(it.gymId??'')===c.tenant&&String(it.userId??'')===c.user&&String(it.sessionId??'')!==c.session){ it.sessionId=c.session; n++ }
+  }
+  if(n) writeTenantQueue(q);
+  return n;
 }
 
 // V39-04B: acceso único a la queue del tenant (fail-closed: null si no hay tenant
@@ -233,6 +279,9 @@ export async function flushQueue(){
     if(Array.isArray(legacy)&&legacy.length) console.warn('[flush] legacy queue quarantined',legacy.length,'items in atlos-queue (not processed)');
   }catch{}
   flushing=true; pushDuringFlush=false;
+  // V39-07B: contexto del flush (tenant+usuario+sesión). Sin identidad completa no se procesa.
+  const ctx0=readContext();
+  if(!ctx0.user||!ctx0.session){ try{ console.warn('[flush] no identity, skipped') }catch{} return }
   try{
   let qAll=null;
   try{ qAll=JSON.parse(localStorage.getItem(key)||'[]'); if(!Array.isArray(qAll)) qAll=[] }catch(err){ console.error('[flush] corrupt queue, aborting without deleting',err?.message||err); return }
@@ -246,7 +295,20 @@ export async function flushQueue(){
   }
   if(nLegacy||nForeign){ try{ console.warn('[flush] non-tenant items kept',nLegacy,'legacy',nForeign,'foreign') }catch{} }
   const remain=[];
-  for(const item of own){
+  let nSkipped=0, drifted=false;
+  for(let idx=0; idx<own.length; idx++){
+    const item=own[idx];
+    // V39-07B: contexto fresco por item; ante deriva se detiene fail-closed.
+    const ctx=readContext();
+    if(ctx.tenant!==ctx0.tenant||ctx.user!==ctx0.user||ctx.session!==ctx0.session){
+      try{ console.warn('[flush] context drift, stopping') }catch{}
+      for(let j=idx;j<own.length;j++) remain.push(own[j]);
+      drifted=true; break;
+    }
+    // V39-07B: solo items de esta misma sesión; el resto queda en cuarentena intacto.
+    if(String(item?.userId??'')!==ctx.user||String(item?.sessionId??'')!==ctx.session){
+      nSkipped++; remain.push(item); continue;
+    }
     try{
       if(item.type==='alumno'){ const _m=await flushAlumnoCrear(item); if(_m){ remapPendingAlumno(own,_m.lid,_m.sid);
         // BLOQUE 4J-B: misma migración en storage + inscripciones (bloque síncrono, sin await entremedio).
@@ -274,6 +336,7 @@ export async function flushQueue(){
       else remain.push(item);
     }catch(e){ const _pl=item.payload||{}; const _ref=_pl._localId||_pl.id||_pl.alumno_id||''; try{ console.warn('[flush]',item.type,e?.status??'no-status',e?.message||e,_ref) }catch{} remain.push(item) }
   }
+  if(nSkipped){ try{ console.warn('[flush] identity-quarantined items kept',nSkipped) }catch{} }
   // BLOQUE 4C: preservar operaciones agregadas durante el flush (multiset por JSON para no perder duplicados idénticos).
   // V39-04B: relectura y escritura sobre la clave snapshot del flush.
   let finalRemain=remain;

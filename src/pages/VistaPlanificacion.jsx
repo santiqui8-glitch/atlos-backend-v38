@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { api, readTenantQueue, writeTenantQueue } from '../services/api'
+import { api, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
 import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
@@ -30,7 +30,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       const _q=readTenantQueue();
       if(_q){
         const _id=String(target.id);
-        const _f=_q.filter(it=>!(it.type==='alumno' && String(it.payload?._localId||'')===_id));
+        const _f=_q.filter(it=>!(it.type==='alumno' && String(it.payload?._localId||'')===_id && sameQueueContext(it)));
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }
     }catch{}
@@ -74,7 +74,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       const _q=readTenantQueue();
       if(_q){
         const _id=String(edit.id);
-        const _f=_q.map(it=> (it.type==='alumno' && String(it.payload?._localId||'')===_id) ? {...it, payload:{...it.payload, nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha||edit.joinedAt}} : it);
+        const _f=_q.map(it=> (it.type==='alumno' && String(it.payload?._localId||'')===_id && sameQueueContext(it)) ? {...it, payload:{...it.payload, nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha||edit.joinedAt}} : it);
         writeTenantQueue(_f);
       }
     }catch{}

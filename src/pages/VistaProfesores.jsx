@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
 import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { remove } from '../services/db'
 import { onEnterNext } from '../utils/helpers.js'
@@ -21,14 +21,14 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     } else if(selected.pending){
       // profesor creado offline sin confirmar: cancelar su alta encolada
       const q=readTenantQueue()
-      if(q) writeTenantQueue(q.filter(it=>!(it.type==='profesor' && String(it.payload._localId||it.payload.id)===String(selected.id))))
+      if(q) writeTenantQueue(q.filter(it=>!(it.type==='profesor' && String(it.payload._localId||it.payload.id)===String(selected.id) && sameQueueContext(it))))
     }
     // BLOQUE 4O: cancelar updateProfesor pendiente del mismo profesor (evita PUT huérfano).
     try{
       const _q=readTenantQueue()
       if(_q){
         const _ids=[selected.serverId,selected.id].filter(Boolean).map(String)
-        const _f=_q.filter(it=>!(it.type==='updateProfesor' && _ids.includes(String(it.payload?.id??''))))
+        const _f=_q.filter(it=>!(it.type==='updateProfesor' && _ids.includes(String(it.payload?.id??'')) && sameQueueContext(it)))
         if(_f.length!==_q.length) writeTenantQueue(_f)
       }
     }catch{}

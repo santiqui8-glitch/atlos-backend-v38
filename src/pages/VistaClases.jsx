@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
 import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
@@ -26,7 +26,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     } else if(selected.pending){
       // clase creada offline todavía sin id de servidor: cancelar su alta encolada
       const q=readTenantQueue()
-      if(q) writeTenantQueue(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id))))
+      if(q) writeTenantQueue(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id) && sameQueueContext(it))))
     }
     const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const filt=local.filter(c=>String(c.id)!==String(selected.id)); localStorage.setItem('atlos-clases',JSON.stringify(filt))
     // BLOQUE 4P: cascada local — borrar inscripciones de la clase eliminada.
@@ -57,7 +57,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       // clase creada offline sin confirmar: pisar el payload encolado con los datos editados
       const q=readTenantQueue()
       if(q){
-        const q2=q.map(it=> (it.type==='clase' && String(it.payload._localId||it.payload.id)===String(edit.id)) ? {...it, payload:{...it.payload, ...data}} : it)
+        const q2=q.map(it=> (it.type==='clase' && String(it.payload._localId||it.payload.id)===String(edit.id) && sameQueueContext(it)) ? {...it, payload:{...it.payload, ...data}} : it)
         writeTenantQueue(q2)
       }
     }
