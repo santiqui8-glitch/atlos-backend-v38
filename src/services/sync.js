@@ -1,6 +1,6 @@
 import { api, flushQueue } from './api';
 import { list, put, bulkPut, normalizeKeys } from './db';
-import { tenantKey } from './tenant';
+import { tenantKey, tenantGetJSON } from './tenant';
 
 const QUEUE_KEY = 'atlos-queue' // V39-04B: legacy/quarantine. Solo flushQueue la lee para avisar; nada la escribe.
 const SYNC_INTERVAL = 60000
@@ -32,8 +32,9 @@ function writeQueue(q) {
 }
 
 // BLOQUE 4D: IDs eliminados por ID (nunca por nombre) para no reinsertar en IDB.
-function readDeletedIds(key) {
-  try { const a=JSON.parse(localStorage.getItem(key)||'[]'); return new Set((Array.isArray(a)?a:[]).map(String)) } catch { return new Set() }
+// V39-05B: listas namespaced por tenant (fail-closed: sin tenant no filtra nada).
+function readDeletedIds(base) {
+  try { const a=tenantGetJSON(base,[]); return new Set((Array.isArray(a)?a:[]).map(String)) } catch { return new Set() }
 }
 
 // Defensa del bug UUID: un id que se pasó por Number() queda NaN y al persistir en JSON se vuelve null.
@@ -75,14 +76,14 @@ async function mirrorLocalStorageToIdb() {
     try {
       const rows = JSON.parse(localStorage.getItem(key) || '[]')
       if (Array.isArray(rows) && rows.length) {
-        const delIds = storeName==='clases' ? readDeletedIds('atlos-deleted-clases') : storeName==='profesores' ? readDeletedIds('atlos-deleted-profesores') : null
+        const delIds = storeName==='clases' ? readDeletedIds('deleted-clases') : storeName==='profesores' ? readDeletedIds('deleted-profesores') : null
         const clean = rows.filter(x => x && x.id !== undefined && !(delIds && delIds.has(String(x.id)))).map(x => ({ ...x, id: String(x.id) }))
         if (clean.length) await bulkPut(storeName, clean)
       }
     } catch {}
   }
   try {
-    const ext = JSON.parse(localStorage.getItem('atlos-alumnos-ext') || '{}')
+    const ext = tenantGetJSON('alumnos-ext',{})
     if (ext && typeof ext === 'object') await put('meta', { id: 'alumnos-ext', value: ext })
   } catch {}
 }
@@ -98,13 +99,13 @@ async function pullAll() {
     api.profesores().catch(() => empty),
   ])
   let extMap = {}
-  try { extMap = JSON.parse(localStorage.getItem('atlos-alumnos-ext') || '{}') } catch {}
+  try { extMap = tenantGetJSON('alumnos-ext',{}) } catch {}
   const existing = await list('students')
   const byId = new Map(existing.map(x => [String(x.id), x]))
-  const delAlumnosIds = readDeletedIds('atlos-deleted-alumnos')
-  const delPagosIds = readDeletedIds('atlos-deleted-pagos')
-  const delClasesIds = readDeletedIds('atlos-deleted-clases')
-  const delProfsIds = readDeletedIds('atlos-deleted-profesores')
+  const delAlumnosIds = readDeletedIds('deleted-alumnos')
+  const delPagosIds = readDeletedIds('deleted-pagos')
+  const delClasesIds = readDeletedIds('deleted-clases')
+  const delProfsIds = readDeletedIds('deleted-profesores')
   const now = new Date().toISOString()
   const studentsToPut = []
   for (const s of students) {

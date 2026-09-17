@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api, readTenantQueue, writeTenantQueue } from '../services/api'
+import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -33,9 +34,9 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }
     }catch{}
-    const del=JSON.parse(localStorage.getItem('atlos-deleted-alumnos')||'[]'); del.push(String(target.id)); localStorage.setItem('atlos-deleted-alumnos',JSON.stringify(del))
-    const delNames=JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]'); delNames.push(target.name.toLowerCase()); localStorage.setItem('atlos-deleted-alumnos-names',JSON.stringify([...new Set(delNames)]))
-    const ext=JSON.parse(localStorage.getItem('atlos-alumnos-ext')||'{}'); delete ext[target.name.toLowerCase()]; localStorage.setItem('atlos-alumnos-ext',JSON.stringify(ext))
+    const del=tenantGetJSON('deleted-alumnos',[]); del.push(String(target.id)); tenantSetJSON('deleted-alumnos',del)
+    const delNames=tenantGetJSON('deleted-alumnos-names',[]); delNames.push(target.name.toLowerCase()); tenantSetJSON('deleted-alumnos-names',[...new Set(delNames)])
+    const ext=tenantGetJSON('alumnos-ext',{}); delete ext[target.name.toLowerCase()]; tenantSetJSON('alumnos-ext',ext)
     // borrar pagos y asistencia locales de ese alumno
     for(const p of await list('payments')){ if(String(p.studentId)===String(target.id) || (p.alumnoNombre&&p.alumnoNombre.toLowerCase()===target.name.toLowerCase())) await remove('payments',p.id) }
     for(const a of await list('attendance')){ if(String(a.studentId)===String(target.id)) await remove('attendance',a.id) }
@@ -63,7 +64,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         const cur=students.find(x=>String(x.id)===String(edit.id))
         if(cur){ await put('students',{...cur, name:nombreCompleto, apellido, dni:dni||cur.dni, phone:telefono, mail, fecha_nacimiento:fecha_nac||cur.fecha_nacimiento||'', enfoque, observaciones, joinedAt:fecha, edad:edad?Number(edad):null})}
         // actualizar extMap también
-        const extKey='atlos-alumnos-ext'; const ext=JSON.parse(localStorage.getItem(extKey)||'{}'); const k=nombreCompleto.toLowerCase(); ext[k]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; localStorage.setItem(extKey,JSON.stringify(ext))
+        const ext=tenantGetJSON('alumnos-ext',{}); const k=nombreCompleto.toLowerCase(); ext[k]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; tenantSetJSON('alumnos-ext',ext)
         setEdit(null); refresh(); return
       }catch(err){ console.warn('actualizar api fallo',err.message)}
     }
@@ -78,7 +79,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       }
     }catch{}
     // actualizar extMap para que refresh lo preserve
-    { const extKey='atlos-alumnos-ext'; const ext=JSON.parse(localStorage.getItem(extKey)||'{}'); const k=nombreCompleto.toLowerCase(); ext[k]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; localStorage.setItem(extKey,JSON.stringify(ext)) }
+    { const ext=tenantGetJSON('alumnos-ext',{}); const k=nombreCompleto.toLowerCase(); ext[k]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; tenantSetJSON('alumnos-ext',ext) }
     setEdit(null); refresh()
   }
   return <section className="panel">

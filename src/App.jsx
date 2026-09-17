@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useReducer } from 'react'
 import { list, put, remove, seed } from './services/db'
 import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed } from './services/api'
 import { startSync, stopSync } from './services/sync'
+import { tenantGetJSON, tenantSetJSON } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
 import logo from './assets/logo.png'
 import Login from './components/Login.jsx'
@@ -81,9 +82,9 @@ export default function App(){
       const pCloud=Array.isArray(pRaw)?pRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),amount:j.monto??j.amount??0,date:j.fecha||j.date||today(),note:j.concepto||j.note||'',metodo:j.metodo||'Efectivo',alumnoNombre:j.alumno_nombre||j.alumno||null})):null
       const aCloud=Array.isArray(aRaw)?aRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),date:j.fecha||j.date||today(),time:j.hora_entrada||j.time||'',activo:j.activo,alumnoNombre:j.alumno_nombre})):null
       const rCloud=Array.isArray(rRaw)?rRaw:null
-      const delAlumnos=new Set(JSON.parse(localStorage.getItem('atlos-deleted-alumnos')||'[]').map(String))
-      const delPagos=new Set(JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]').map(String))
-      const extMap=JSON.parse(localStorage.getItem('atlos-alumnos-ext')||'{}')
+      const delAlumnos=new Set(tenantGetJSON('deleted-alumnos',[]).map(String))
+      const delPagos=new Set(tenantGetJSON('deleted-pagos',[]).map(String))
+      const extMap=tenantGetJSON('alumnos-ext',{})
       let s=sCloud? Array.from(new Map([...sCloud.map(x=>{const k=x.name?.toLowerCase(); const ex=extMap[k]; if(ex) return {...x, apellido:ex.apellido, dni:ex.dni||x.dni, mail:ex.mail||x.mail||x.email, fecha_nacimiento:ex.fecha_nacimiento||x.fecha_nacimiento||'', enfoque:ex.enfoque, observaciones:ex.observaciones}; return x}),...localS].map(x=>[String(x.id),x])).values()) : localS
       s=s.filter(x=>!delAlumnos.has(String(x.id)))
       // dedup: solo colapsa duplicado UUID+cloud del mismo nombre (evitar perder homónimos con distinto DNI)
@@ -111,7 +112,7 @@ export default function App(){
       p=p.filter(x=>!delPagos.has(String(x.id)) && !delAlumnos.has(String(x.studentId)))
       const a=aCloud? Array.from(new Map([...aCloud,...localA].map(x=>[String(x.id),x])).values()).filter(x=>!delAlumnos.has(String(x.studentId))) : localA.filter(x=>!delAlumnos.has(String(x.studentId)))
       const r=rCloud? Array.from(new Map([...rCloud,...localR].map(x=>[String(x.id),x])).values()) : localR
-      const delClases=new Set(JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]').map(String))
+      const delClases=new Set(tenantGetJSON('deleted-clases',[]).map(String))
       const localC=JSON.parse(localStorage.getItem('atlos-clases')||'[]')
       let cRawMapped=[]
       if(Array.isArray(cRaw)){ cRawMapped=cRaw.map(j=>({id:j.id, nombre:j.nombre||j.name, dia_mes:j.dia_mes||j.dia, hora_inicio:j.hora_inicio||j.inicio, hora_fin:j.hora_fin||j.fin, capacidad:j.capacidad||j.cap, profesor:j.profesor||'', inscriptos:j.inscriptos||j.inscriptos_count||0})) }
@@ -122,7 +123,7 @@ export default function App(){
       // merge inscripciones locales al contador
       try{ const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); const cnt=new Map(); for(const it of ins){ const k=String(it.clase_id); cnt.set(k,(cnt.get(k)||0)+1)} const cc=[]; for(const x of c){ const y={}; for(const kk in x) y[kk]=x[kk]; y.inscriptos=(Number(x.inscriptos)||0)+(cnt.get(String(x.id))||0); cc.push(y) } c=cc }catch{}
       const e=Array.isArray(eRaw)?eRaw:null
-      const delProfs=new Set(JSON.parse(localStorage.getItem('atlos-deleted-profesores')||'[]').map(String))
+      const delProfs=new Set(tenantGetJSON('deleted-profesores',[]).map(String))
       const localProfs=JSON.parse(localStorage.getItem('atlos-profesores')||'[]').filter(x=>!delProfs.has(String(x.id)))
       // merge profesores nube + local (el registro de la nube tiene prioridad cuando llega con serverId)
       const profsCloud=Array.isArray(profsRaw)?profsRaw.map(j=>({id:String(j.id), serverId:String(j.id), nombre:j.nombre||j.name||'', apellido:j.apellido||'', telefono:j.telefono||'', especialidad:j.especialidad||'General', nombreCompleto:j.nombreCompleto||[j.nombre||j.name,j.apellido].filter(Boolean).join(' ').trim(), pending:false})):[]
@@ -184,9 +185,9 @@ export default function App(){
     // si re-crea un nombre previamente borrado, liberar el filtro para que no se borre al refrescar
     { 
       const k=nombreCompleto.toLowerCase(); 
-      const delN=JSON.parse(localStorage.getItem('atlos-deleted-alumnos-names')||'[]'); 
-      const filt=delN.filter(n=>String(n).toLowerCase()!==k); 
-      if(filt.length!==delN.length) localStorage.setItem('atlos-deleted-alumnos-names',JSON.stringify(filt)) 
+      const delN=tenantGetJSON('deleted-alumnos-names',[]);
+      const filt=delN.filter(n=>String(n).toLowerCase()!==k);
+      if(filt.length!==delN.length) tenantSetJSON('deleted-alumnos-names',filt)
     }
     
     const data={nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha}; 
@@ -198,10 +199,9 @@ export default function App(){
       await put('students',{id:localId,name:nombreCompleto,apellido,dni:dni||'',phone:telefono,mail:mail||'',fecha_nacimiento:fecha_nac,edad:edad?Number(edad):null,enfoque,observaciones,joinedAt:fecha,status:'activo',createdAt:new Date().toISOString()});
       queuePush('alumno', {...data, _localId:localId})
     } else if(dni||mail||enfoque||observaciones||apellido||fecha_nac){
-      const extKey='atlos-alumnos-ext'; 
-      const ext=JSON.parse(localStorage.getItem(extKey)||'{}'); 
-      ext[nombreCompleto.toLowerCase()]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones}; 
-      localStorage.setItem(extKey,JSON.stringify(ext))
+      const ext=tenantGetJSON('alumnos-ext',{});
+      ext[nombreCompleto.toLowerCase()]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones};
+      tenantSetJSON('alumnos-ext',ext)
     }
     
     setModal(null); 

@@ -41,3 +41,20 @@ export function tenantKey(baseKey){
   if(/[:\s]/.test(base)) return null;
   return `${NS_PREFIX}:${tenant}:${base}`;
 }
+
+// V39-05B: acceso JSON fail-closed a claves namespaced. Sin tenant válido no
+// lee ni escribe nada global: lectura devuelve el fallback, escritura se omite.
+export function tenantGetJSON(baseKey, fallback){
+  const key=tenantKey(baseKey);
+  if(!key){ try{ console.warn('[tenant] no tenant, read skipped',baseKey) }catch{} return fallback }
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw==null) return fallback;
+    return JSON.parse(raw);
+  }catch(err){ console.warn('[tenant] read failed',baseKey,err?.message||err); return fallback }
+}
+export function tenantSetJSON(baseKey, value){
+  const key=tenantKey(baseKey);
+  if(!key){ try{ console.warn('[tenant] no tenant, write skipped',baseKey) }catch{} return false }
+  try{ localStorage.setItem(key,JSON.stringify(value)); return true }catch(err){ console.warn('[tenant] write failed',baseKey,err?.message||err); return false }
+}

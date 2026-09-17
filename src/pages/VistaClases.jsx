@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
+import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -36,7 +37,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       if(_f.length!==_ins.length) localStorage.setItem('atlos-inscripciones',JSON.stringify(_f));
     }catch{}
     try{ await remove('clases',selected.id).catch(()=>{}); await remove('clases',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('clases',String(selected.serverId)).catch(()=>{}) }catch{}
-    const del=JSON.parse(localStorage.getItem('atlos-deleted-clases')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-clases',JSON.stringify(del))
+    const del=tenantGetJSON('deleted-clases',[]); del.push(String(selected.id)); tenantSetJSON('deleted-clases',del)
     setSel(null); refresh()
   }
   const handleEdit=()=>{ if(!selected) return alert('Seleccioná una clase de la lista.'); setEdit(selected) }

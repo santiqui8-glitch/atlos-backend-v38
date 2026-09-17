@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue } from '../services/api'
+import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { remove } from '../services/db'
 import { onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -33,7 +34,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     }catch{}
     const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); localStorage.setItem('atlos-profesores',JSON.stringify(filt))
     try{ await remove('profesores',selected.id).catch(()=>{}); await remove('profesores',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('profesores',String(selected.serverId)).catch(()=>{}) }catch{}
-    const del=JSON.parse(localStorage.getItem('atlos-deleted-profesores')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-profesores',JSON.stringify(del))
+    const del=tenantGetJSON('deleted-profesores',[]); del.push(String(selected.id)); tenantSetJSON('deleted-profesores',del)
     setSel(null); refresh()
   }
   const handleEdit=()=>{ if(!selected) return alert('Seleccioná un profesor.'); setEdit(selected) }

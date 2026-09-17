@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { api, queuePush, readTenantQueue, writeTenantQueue } from '../services/api'
+import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -13,7 +14,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná un pago de la lista.')
     if(!confirm(`¿Eliminar pago ID #${selected.id} de ${selected.alumnoNombre||students.find(s=>String(s.id)===String(selected.studentId))?.name||'—'}?`)) return
-    const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos',JSON.stringify(del))
+    const del=tenantGetJSON('deleted-pagos',[]); del.push(String(selected.id)); tenantSetJSON('deleted-pagos',del)
     // BLOQUE 4K-B: cancelar create pendiente de este pago (evita fantasma en backend, como alumnos).
     try{
       const _q=readTenantQueue();
@@ -56,7 +57,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }catch{}
     };
-    if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); const del=JSON.parse(localStorage.getItem('atlos-deleted-pagos')||'[]'); del.push(String(selected.id)); localStorage.setItem('atlos-deleted-pagos', JSON.stringify(del)); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')){ const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}; if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO}) } } }
+    if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); const del=tenantGetJSON('deleted-pagos',[]); del.push(String(selected.id)); tenantSetJSON('deleted-pagos',del); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')){ const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}; if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO}) } } }
     await remove('payments',selected.id); await put('payments',{id:selected.id,_localId:selected._localId||selected.id,studentId:String(sid),amount:data.monto,date:fechaISO,note:data.concepto,metodo:data.metodo})
     coalescePago({alumno_id:isUUID?String(sid):Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}, fechaISO);
     setEdit(null); setSel(null); refresh()
