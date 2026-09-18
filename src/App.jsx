@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useReducer } from 'react'
+import React, { useEffect, useMemo, useState, useReducer, Suspense, lazy } from 'react'
 import { list, put, remove, seed } from './services/db'
 import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems } from './services/api'
 import { startSync, stopSync } from './services/sync'
@@ -11,14 +11,16 @@ import Modal from './components/Modal.jsx'
 import { StudentForm, PaymentForm, RoutineForm, ClaseForm, ProfesorForm, UsuarioForm } from './components/forms.jsx'
 import VistaInicio from './pages/VistaInicio.jsx'
 import VistaGestion from './pages/VistaGestion.jsx'
-import VistaReportes from './pages/VistaReportes.jsx'
 import VistaPlanificacion from './pages/VistaPlanificacion.jsx'
 import VistaAsistencia from './pages/VistaAsistencia.jsx'
 import VistaClases from './pages/VistaClases.jsx'
-import VistaPlanes from './pages/VistaPlanes.jsx'
 import VistaProfesores from './pages/VistaProfesores.jsx'
-import VistaPersonal from './pages/VistaPersonal.jsx'
-import VistaLicencias from './pages/VistaLicencias.jsx'
+// V40-03B: vistas pesadas/ocasionales en lazy (recharts, PDF/rutinas, admin).
+// El fallback de Suspense es intencionalmente simple.
+const VistaReportes = lazy(() => import('./pages/VistaReportes.jsx'))
+const VistaPlanes = lazy(() => import('./pages/VistaPlanes.jsx'))
+const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
+const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
 
 // BLOQUE 4F: guards de doble submit (sin cambiar UI ni payloads).
 // V39-11B: in-flight protection de refresh (sin solapamientos).
@@ -327,6 +329,7 @@ export default function App(){
           </div>}
         </div>
         <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
+      <Suspense fallback={<div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} onNew={()=>setModal('payment')} refresh={refresh}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
@@ -337,6 +340,7 @@ export default function App(){
       {page==='profesores'&&<VistaProfesores profesores={profesores} onNew={()=>setModal('profesor')} refresh={refresh}/>}
       {page==='personal'&&<VistaPersonal usuarios={usuarios} onNew={()=>setModal('usuario')} refresh={refresh}/>}
       {page==='licencias'&&<VistaLicencias/>}
+      </Suspense>
     </main>
     {modal&&<Modal title={{student:'Nuevo alumno',payment:'Registrar pago',routine:'Agregar ejercicio',clase:'Nueva clase',usuario:'Nuevo usuario',profesor:'Nuevo profesor'}[modal]||modal} onClose={()=>{setModal(null); setRenewAlumno(null)}}>
       {modal==='student'&&<StudentForm onSubmit={saveStudent}/>}

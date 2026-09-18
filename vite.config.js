@@ -3,6 +3,23 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  build: {
+    // V40-03B: vendors pesados en chunk propio + monitoreo del tamaño.
+    chunkSizeWarningLimit: 500,
+    rolldownOptions: {
+      output: {
+        // V40-03B: vendors pesados en chunks propios (forma función que
+        // exige rolldown; undefined = comportamiento por defecto).
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('recharts')) return 'charts';
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('\\react\\') || id.includes('\\react-dom\\')) return 'vendor';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
