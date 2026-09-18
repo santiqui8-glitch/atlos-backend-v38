@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useReducer } from 'react'
 import { list, put, remove, seed } from './services/db'
 import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems } from './services/api'
 import { startSync, stopSync } from './services/sync'
-import { tenantGetJSON, tenantSetJSON, clearTenantEntityData } from './services/tenant'
+import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
 import logo from './assets/logo.png'
 import Login from './components/Login.jsx'
@@ -21,6 +21,8 @@ import VistaPersonal from './pages/VistaPersonal.jsx'
 import VistaLicencias from './pages/VistaLicencias.jsx'
 
 // BLOQUE 4F: guards de doble submit (sin cambiar UI ni payloads).
+// V39-11B: in-flight protection de refresh (sin solapamientos).
+let refreshing=false;
 let savingClase=false;
 let savingProfesor=false;
 let savingAlumno=false;
@@ -65,6 +67,11 @@ export default function App(){
   if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Ventas']]
 
   const refresh=async()=>{
+    // V39-11B: sin solapamientos + snapshot de tenant ANTES de la primera
+    // petición. Si el tenant cambia mid-flight, no se toca el estado (fail-closed).
+    if(refreshing) return;
+    refreshing=true;
+    const ctxTenant=getCurrentTenant();
     try{
       const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw]=await Promise.all([
         api.alumnos().catch(err=>{ console.warn('[refresh]','alumnos',err?.message||err); return null }),
@@ -138,6 +145,8 @@ export default function App(){
         if(curCloud&&!prevCloud) profByKey.set(key,x)
       }
       const profs=Array.from(profByKey.values()).filter(x=>!delProfs.has(String(x.id)))
+      // V39-11B: fail-closed — el estado solo se actualiza para el tenant que inició el refresh.
+      if(getCurrentTenant()!==ctxTenant) return;
       if(!s.length){
         // no reseed demo si el usuario ya borró alumnos (los 3 demo Juan/Sofía/Martín volvían siempre)
         if(import.meta.env.DEV && delAlumnos.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id))); setStudents(filteredSeeded) } else { setStudents([]) }
@@ -145,6 +154,7 @@ export default function App(){
       setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
       return
     }catch(e){ console.error('refresh',e); return }
+    finally{ refreshing=false }
   }
   const purgeDemo=async()=>{ if(import.meta.env.DEV) return; try{ const localS=await list('students'); for(const x of localS){ const n=String(x.name||'').toLowerCase(); if(['juan pérez','sofía gómez','martín día'].includes(n)) await remove('students',x.id) } }catch(e){ console.warn('purgeDemo',e) } }
   useEffect(()=>{ if(logged) {purgeDemo().then(()=>refresh()); startSync(refresh); return ()=>stopSync()}},[logged])

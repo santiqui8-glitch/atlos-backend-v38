@@ -1,6 +1,6 @@
 import { api, flushQueue } from './api';
 import { list, put, bulkPut, normalizeKeys } from './db';
-import { tenantKey, tenantGetJSON } from './tenant';
+import { tenantKey, tenantGetJSON, getCurrentTenant } from './tenant';
 
 const QUEUE_KEY = 'atlos-queue' // V39-04B: legacy/quarantine. Solo flushQueue la lee para avisar; nada la escribe.
 const SYNC_INTERVAL = 60000
@@ -91,6 +91,10 @@ async function mirrorLocalStorageToIdb() {
 }
 
 async function pullAll() {
+  // V39-11B: snapshot del tenant ANTES de la primera petición de red. Si cambia
+  // mid-flight, la persistencia se descarta (fail-closed): ningún bulkPut corre.
+  const ctxTenant=getCurrentTenant();
+  const drifted=()=>getCurrentTenant()!==ctxTenant;
   const empty = []
   const [students, payments, attendance, routines, clases, profesores] = await Promise.all([
     api.alumnos().catch(() => empty),
@@ -130,7 +134,8 @@ async function pullAll() {
       createdAt: prev.createdAt || now,
     })
   }
-  if (studentsToPut.length) await bulkPut('students', studentsToPut)
+  if(drifted()){ try{ console.warn('[sync] tenant drift, pullAll discarded') }catch{} return }
+  if (studentsToPut.length && !drifted()) await bulkPut('students', studentsToPut)
   const pRows = payments.filter(p=>!delPagosIds.has(String(p.id)) && !delAlumnosIds.has(String(p.alumno_id||p.student_id||p.studentId||''))).map(p => ({
     id: String(p.id),
     studentId: String(p.alumno_id || p.student_id || p.studentId || ''),
@@ -140,7 +145,7 @@ async function pullAll() {
     metodo: p.metodo || 'Efectivo',
     alumnoNombre: p.alumno_nombre || p.alumno || '',
   }))
-  if (pRows.length) await bulkPut('payments', pRows)
+  if (pRows.length && !drifted()) await bulkPut('payments', pRows)
   const aRows = attendance.filter(a=>!delAlumnosIds.has(String(a.alumno_id||a.student_id||a.studentId||''))).map(a => ({
     id: String(a.id),
     studentId: String(a.alumno_id || a.student_id || a.studentId || ''),
@@ -148,7 +153,7 @@ async function pullAll() {
     time: a.hora_entrada || a.time || '',
     alumnoNombre: a.alumno_nombre || '',
   }))
-  if (aRows.length) await bulkPut('attendance', aRows)
+  if (aRows.length && !drifted()) await bulkPut('attendance', aRows)
   const rRows = routines.map(r => ({
     id: String(r.id),
     studentId: String(r.student_id || r.studentId || r.alumno_id || ''),
@@ -159,7 +164,7 @@ async function pullAll() {
     peso: r.peso || '',
     period: r.period || '',
   }))
-  if (rRows.length) await bulkPut('routines', rRows)
+  if (rRows.length && !drifted()) await bulkPut('routines', rRows)
   const cRows = Array.isArray(clases) ? clases.filter(c=>!delClasesIds.has(String(c.id))).map(c => ({
     id: String(c.id),
     nombre: c.nombre || c.name || '',
@@ -170,7 +175,7 @@ async function pullAll() {
     profesor: c.profesor || '',
     inscriptos: c.inscriptos || c.inscriptos_count || 0,
   })) : []
-  if (cRows.length) await bulkPut('clases', cRows)
+  if (cRows.length && !drifted()) await bulkPut('clases', cRows)
   const prRows = Array.isArray(profesores) ? profesores.filter(x=>!delProfsIds.has(String(x.id))).map(x => {
     const nombreCompleto = x.nombreCompleto || `${x.nombre || ''} ${x.apellido || ''}`.trim()
     return {
@@ -182,28 +187,39 @@ async function pullAll() {
       nombreCompleto,
     }
   }) : []
-  if (prRows.length) await bulkPut('profesores', prRows)
-  if (extMap && typeof extMap === 'object') await put('meta', { id: 'alumnos-ext', value: extMap }).catch(() => {})
+  if (prRows.length && !drifted()) await bulkPut('profesores', prRows)
+  if (!drifted() && extMap && typeof extMap === 'object') await put('meta', { id: 'alumnos-ext', value: extMap }).catch(() => {})
 }
 
+// V39-11B: in-flight protection (sin solapamientos) + snapshot de tenant.
+let verifying=false;
 async function verify() {
+  if(verifying){ try{ console.log('[sync] verify in-flight, skipped') }catch{} return }
+  verifying=true;
+  // Snapshot ANTES de la primera petición; si el tenant cambia mid-flight se
+  // descarta el pull/emit (fail-closed). lastVersion solo avanza sin drift.
+  const ctxTenant=getCurrentTenant();
+  const drifted=()=>getCurrentTenant()!==ctxTenant;
   try {
     sanitizeQueue()
     if (navigator.onLine) await flushQueue().catch(() => {})
     const data = await api.syncVersion().catch(() => null)
     const ver = data && data.version
+    if(drifted()){ try{ console.warn('[sync] tenant drift, verify discarded') }catch{} return }
     if (ver && ver !== lastVersion) {
       lastVersion = ver
       await pullAll()
+      if(drifted()){ try{ console.warn('[sync] tenant drift, emit skipped') }catch{} return }
       if (typeof emitChange === 'function') emitChange()
     } else if (lastVersion === null && navigator.onLine) {
       lastVersion = ver || 'initial'
       await pullAll()
+      if(drifted()){ try{ console.warn('[sync] tenant drift, emit skipped') }catch{} return }
       if (typeof emitChange === 'function') emitChange()
     }
   } catch (e) {
     console.log('[sync]', e && e.message)
-  }
+  } finally { verifying=false }
 }
 
 export function startSync(onUpdate) {
