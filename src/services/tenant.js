@@ -64,6 +64,35 @@ export function tenantSetJSON(baseKey, value){
 // V39-10: se incluye 'alumnos-ext' (ya namespaced vía tenantGetJSON/SetJSON).
 // No toca cola, IDB, auth ni sesión. Devuelve la cantidad de claves eliminadas.
 const ENTITY_BASES=['clases','profesores','inscripciones','library','alumnos-ext'];
+
+// V39-12B: tombstones acotados. Al agregar un ID a deleted-* se deduplica y se
+// aplica tope FIFO (defecto 500) para que la lista no crezca indefinidamente.
+// Legacy global intacto (cuarentena). Devuelve la lista resultante.
+export function pushDeletedId(baseKey, id, max=500){
+  const sid=String(id??'').trim();
+  if(!sid) return tenantGetJSON(baseKey,[]);
+  let arr=tenantGetJSON(baseKey,[]);
+  if(!Array.isArray(arr)) arr=[];
+  const clean=arr.map(String).filter(x=>x!==sid);
+  clean.push(sid);
+  const cap=(typeof max==='number'&&max>0)?Math.floor(max):500;
+  const out=clean.length>cap?clean.slice(clean.length-cap):clean;
+  tenantSetJSON(baseKey,out);
+  return out;
+}
+// V39-12B: des-tombstoning por ID. Si el sid vuelve a existir (re-creación o
+// reutilización del backend), se libera para que no se filtre. Devuelve true
+// si eliminó al menos una entrada.
+export function removeDeletedId(baseKey, id){
+  const sid=String(id??'').trim();
+  if(!sid) return false;
+  const arr=tenantGetJSON(baseKey,[]);
+  if(!Array.isArray(arr)) return false;
+  const out=arr.map(String).filter(x=>x!==sid);
+  if(out.length===arr.length) return false;
+  tenantSetJSON(baseKey,out);
+  return true;
+}
 export function clearTenantEntityData(){
   const tenant=getCurrentTenant();
   if(!tenant) return 0;

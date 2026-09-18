@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
-import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
+import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -34,8 +34,8 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }
     }catch{}
-    const del=tenantGetJSON('deleted-alumnos',[]); del.push(String(target.id)); tenantSetJSON('deleted-alumnos',del)
-    const delNames=tenantGetJSON('deleted-alumnos-names',[]); delNames.push(target.name.toLowerCase()); tenantSetJSON('deleted-alumnos-names',[...new Set(delNames)])
+    pushDeletedId('deleted-alumnos',target.id)
+    pushDeletedId('deleted-alumnos-names',target.name.toLowerCase())
     const ext=tenantGetJSON('alumnos-ext',{}); delete ext[target.name.toLowerCase()]; tenantSetJSON('alumnos-ext',ext)
     // borrar pagos y asistencia locales de ese alumno
     for(const p of await list('payments')){ if(String(p.studentId)===String(target.id) || (p.alumnoNombre&&p.alumnoNombre.toLowerCase()===target.name.toLowerCase())) await remove('payments',p.id) }

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useReducer } from 'react'
 import { list, put, remove, seed } from './services/db'
 import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems } from './services/api'
 import { startSync, stopSync } from './services/sync'
-import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant } from './services/tenant'
+import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant, removeDeletedId } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
 import logo from './assets/logo.png'
 import Login from './components/Login.jsx'
@@ -193,12 +193,7 @@ export default function App(){
     if(savingAlumno) return; savingAlumno=true; try{
     
     // si re-crea un nombre previamente borrado, liberar el filtro para que no se borre al refrescar
-    { 
-      const k=nombreCompleto.toLowerCase(); 
-      const delN=tenantGetJSON('deleted-alumnos-names',[]);
-      const filt=delN.filter(n=>String(n).toLowerCase()!==k);
-      if(filt.length!==delN.length) tenantSetJSON('deleted-alumnos-names',filt)
-    }
+    { const k=nombreCompleto.toLowerCase(); removeDeletedId('deleted-alumnos-names',k) }
     
     const data={nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha}; 
     let cloudOk=false; 
@@ -246,6 +241,7 @@ export default function App(){
     if(navigator.onLine){
       try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}) } }
     } else { queuePush('clase',{...data,_localId:localId}); pendiente=true }
+    if(serverId) removeDeletedId('deleted-clases',serverId);
     if(!ok){ const local=tenantGetJSON('clases',[]); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); tenantSetJSON('clases',local) }
     setModal(null); refresh() }finally{ savingClase=false } }
   const saveProfesor=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const nombre=f.get('nombre')?.trim(); const apellido=f.get('apellido')?.trim(); const telefono=f.get('telefono')?.trim(); const especialidad=f.get('especialidad')?.trim()||'General'; if(!nombre||!apellido) return alert('Nombre y apellido requeridos');
@@ -256,6 +252,7 @@ export default function App(){
       try{ const r=await api.crearProfesor({nombre, apellido, telefono:telefono||'', especialidad}); serverId=(r&&(r.id??r._id))||null }
       catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}) } }
     } else { queuePush('profesor', {_localId:localId}); pendiente=true }
+    if(serverId) removeDeletedId('deleted-profesores',serverId);
     const arr=tenantGetJSON('profesores',[])
     arr.push(serverId ? {...localRec, id:String(serverId), serverId:String(serverId), pending:false} : {...localRec, pending:pendiente})
     tenantSetJSON('profesores',arr); setModal(null); refresh() }finally{ savingProfesor=false } }

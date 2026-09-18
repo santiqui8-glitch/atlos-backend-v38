@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
-import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
+import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { remove } from '../services/db'
 import { onEnterNext } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
@@ -34,7 +34,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     }catch{}
     const arr=tenantGetJSON('profesores',[]); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); tenantSetJSON('profesores',filt)
     try{ await remove('profesores',selected.id).catch(()=>{}); await remove('profesores',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('profesores',String(selected.serverId)).catch(()=>{}) }catch{}
-    const del=tenantGetJSON('deleted-profesores',[]); del.push(String(selected.id)); tenantSetJSON('deleted-profesores',del)
+    pushDeletedId('deleted-profesores',selected.id)
     setSel(null); refresh()
   }
   const handleEdit=()=>{ if(!selected) return alert('Seleccioná un profesor.'); setEdit(selected) }

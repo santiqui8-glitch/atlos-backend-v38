@@ -1,5 +1,5 @@
 import { list, put, remove } from './db';
-import { getCurrentTenant, tenantKey, tenantGetJSON, tenantSetJSON } from './tenant';
+import { getCurrentTenant, tenantKey, tenantGetJSON, tenantSetJSON, removeDeletedId } from './tenant';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://atlos-api-production.up.railway.app';
 
@@ -246,6 +246,8 @@ async function flushProfesorCrear(item){
     const idx=arr2.findIndex(x=>String(x.id)===lid)
     if(idx>=0){ arr2[idx]={...arr2[idx], id:nsid, serverId:nsid, pending:false} }
     tenantSetJSON('profesores',arr2)
+    // V39-12B: si el sid estaba tombstoned, la re-creación lo revive.
+    removeDeletedId('deleted-profesores',nsid)
     return {ok:true, lid, sid:nsid}
   }catch(e){ console.warn('[flush] profesor reconcile',e?.message||e,lid); return {ok:false, code:'reconcile-error', lid, sid:nsid} }
 }
@@ -287,6 +289,8 @@ async function flushClaseCrear(item){
     const idx=arr.findIndex(c=>String(c.id)===String(lid))
     if(idx>=0){ arr[idx]={...arr[idx], id:nsid, pending:false, serverId:nsid} }
     tenantSetJSON('clases',arr)
+    // V39-12B: si el sid estaba tombstoned, la re-creación lo revive.
+    removeDeletedId('deleted-clases',nsid)
     // BLOQUE 4N: migrar inscripciones _localId → sid (solo con sid válido, como 4J-B).
     if(lid){
       const ins=tenantGetJSON('inscripciones',[]);
@@ -468,6 +472,8 @@ export async function flushQueue(){
         // item se conserva con state='reconcile_pending' (no sale de cola).
         const _r=await flushAlumnoCrear(item);
         if(_r&&_r.ok){
+          // V39-12B: si el sid estaba tombstoned, la re-creación lo revive.
+          if(_r.sid) removeDeletedId('deleted-alumnos',_r.sid);
           if(_r.lid&&_r.sid){ remapPendingAlumno(own,_r.lid,_r.sid);
             // BLOQUE 4J-B: misma migración en storage + inscripciones (bloque síncrono, sin await entremedio).
             // V39-04B: se usa la clave snapshot del flush (no se re-deriva el tenant).
