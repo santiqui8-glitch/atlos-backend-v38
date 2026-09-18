@@ -4,7 +4,6 @@ import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID,
 import { startSync, stopSync } from './services/sync'
 import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant, removeDeletedId } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
-import logo from './assets/logo.png'
 import Login from './components/Login.jsx'
 import GymGate from './components/GymGate.jsx'
 import Modal from './components/Modal.jsx'
@@ -309,7 +308,7 @@ export default function App(){
   useEffect(()=>{ if(notifs.length) console.log('🔔 ATLOS notifs',notifs) },[notifs.length])
   return <div className="app">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-logo"><img src={logo} alt="ATLOS" onError={e=>{e.currentTarget.style.display='none'; const fb=e.currentTarget.nextSibling; if(fb) fb.style.display='grid'}}/><div className="logo-fallback" style={{display:'none'}}>A</div></div><div><b>ATLOS</b><span>Gestión de gimnasios</span></div></div>
+      <div className="brand"><div className="brand-logo"><img src="/logo.png" alt="ATLOS" width="256" height="175" onError={e=>{e.currentTarget.style.display='none'; const fb=e.currentTarget.nextSibling; if(fb) fb.style.display='grid'}}/><div className="logo-fallback" style={{display:'none'}}>A</div></div><div><b>ATLOS</b><span>Gestión de gimnasios</span></div></div>
       <nav>{nav.map(([id,ic,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><span>{ic}</span>{label}</button>)}</nav>
       <div className="sidebar-foot"><div className={`status ${online?'on':'off'}`}></div><div><b>{online?'Online':'Modo offline'}</b><span>{usuario} · {rol}</span></div></div>
     </aside>
@@ -329,7 +328,7 @@ export default function App(){
           </div>}
         </div>
         <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
-      <Suspense fallback={<div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
+      <Suspense fallback={<div style={{padding:20,minHeight:400,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} onNew={()=>setModal('payment')} refresh={refresh}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}

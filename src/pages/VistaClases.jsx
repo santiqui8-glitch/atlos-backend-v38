@@ -108,7 +108,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
         <button className="primary" onClick={handleInscribir} style={{background:'#0ea5e9'}}>INSCRIBIR</button>
       </div>
     </div>
-    <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:12}}><div className="stat blue"><div className="stat-icon">🗓</div><span>CLASES</span><strong>{clases.length}</strong></div><div className="stat orange"><div className="stat-icon">👥</div><span>INSCRIPCIONES</span><strong>{totalIns}</strong></div></div>
+    <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:12}}><div className="stat blue"><div className="stat-icon" aria-hidden="true">🗓</div><span>CLASES</span><strong>{clases.length}</strong></div><div className="stat orange"><div className="stat-icon" aria-hidden="true">👥</div><span>INSCRIPCIONES</span><strong>{totalIns}</strong></div></div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
       <div className="thead" style={{display:'grid',gridTemplateColumns:'50px 1.6fr 70px 85px 85px 65px 1.2fr 70px',gap:0,background:'var(--table-head)',padding:'10px 8px'}}><span>ID</span><span>Clase</span><span>Día</span><span>Inicio</span><span>Fin</span><span>Cap.</span><span>Profesor</span><span>Insc.</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>

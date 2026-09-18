@@ -71,9 +71,9 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
       </div>
     </div>
     <div className="cards" style={{marginTop:14,gridTemplateColumns:rol==='Empleado'?'1fr 1fr':'repeat(3,1fr)'}}>
-      {rol!=='Empleado'&&<div className="stat orange"><div className="stat-icon">$</div><span>INGRESOS</span><strong>{money(totalMes)}</strong></div>}
-      <div className="stat green"><div className="stat-icon">🧾</div><span>PAGOS</span><strong>{payments.length}</strong></div>
-      <div className="stat blue"><div className="stat-icon">✓</div><span>ALUMNOS AL DÍA</span><strong>{stats.alumnosAlDia}</strong></div>
+      {rol!=='Empleado'&&<div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>INGRESOS</span><strong>{money(totalMes)}</strong></div>}
+      <div className="stat green"><div className="stat-icon" aria-hidden="true">🧾</div><span>PAGOS</span><strong>{payments.length}</strong></div>
+      <div className="stat blue"><div className="stat-icon" aria-hidden="true">✓</div><span>ALUMNOS AL DÍA</span><strong>{stats.alumnosAlDia}</strong></div>
     </div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
       <div className="thead" style={{display:'grid',gridTemplateColumns:'60px 120px 1.5fr 1.2fr 110px 120px',background:'var(--table-head)',padding:'10px 8px',margin:0}}><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>

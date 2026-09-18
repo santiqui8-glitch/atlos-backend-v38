@@ -56,11 +56,11 @@ export default function VistaLicencias(){
     <section className="panel">
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}><PanelTitle title="Panel de Ventas — Multi-Gym"/><button className="ghost" onClick={fetchLic}>↻ Actualizar</button></div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginTop:12}}>
-        <div className="stat blue"><div className="stat-icon">🏋</div><span>Gyms</span><strong>{stats.total}</strong><small>licencias</small></div>
-        <div className="stat green"><div className="stat-icon">🟢</div><span>Activas</span><strong>{stats.activas}</strong><small>al día</small></div>
-        <div className="stat orange"><div className="stat-icon">⏳</div><span>Por vencer ≤7d</span><strong>{stats.porVencer}</strong><small>renovar ahora</small></div>
-        <div className="stat" style={{background:'rgba(239,68,68,.08)',border:'1px solid #EF4444',color:'#EF4444'}}><div className="stat-icon">🔴</div><span>Vencidas</span><strong>{stats.vencidas}</strong><small>posibles bajas</small></div>
-        <div className="stat purple"><div className="stat-icon">💰</div><span>MRR estimado</span><strong>{money(stats.mrr)}</strong><small>por mes activo</small></div>
+        <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Gyms</span><strong>{stats.total}</strong><small>licencias</small></div>
+        <div className="stat green"><div className="stat-icon" aria-hidden="true">🟢</div><span>Activas</span><strong>{stats.activas}</strong><small>al día</small></div>
+        <div className="stat orange"><div className="stat-icon" aria-hidden="true">⏳</div><span>Por vencer ≤7d</span><strong>{stats.porVencer}</strong><small>renovar ahora</small></div>
+        <div className="stat" style={{background:'rgba(239,68,68,.08)',border:'1px solid #EF4444',color:'#EF4444'}}><div className="stat-icon" aria-hidden="true">🔴</div><span>Vencidas</span><strong>{stats.vencidas}</strong><small>posibles bajas</small></div>
+        <div className="stat purple"><div className="stat-icon" aria-hidden="true">💰</div><span>MRR estimado</span><strong>{money(stats.mrr)}</strong><small>por mes activo</small></div>
       </div>
       <div style={{display:'flex',gap:8,margin:'14px 0 0'}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar por gym, código (HWID) o email..." style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10,padding:'10px 12px',outline:'none'}}/></div>
       <p style={{fontSize:12,color:'var(--muted)',margin:'10px 0'}}>Solo <code>admin Dueño</code>. Cada fila = un gym con su <code>HWID</code> compartido multi-PC. Renová, bloqueá, desbloqueá o eliminá desde acá.</p>

@@ -2,8 +2,6 @@ import React from 'react'
 import useClock from '../hooks/useClock.js'
 import { PanelTitle, Empty } from '../components/ui.jsx'
 import { money } from '../utils/helpers.js'
-import logo from '../assets/logo.png'
-
 
 export default function VistaInicio({stats,clases,usuario,onNavigate}){
   const now=useClock()
@@ -13,12 +11,12 @@ export default function VistaInicio({stats,clases,usuario,onNavigate}){
   const y=now.getFullYear(), m=now.getMonth(); const first=new Date(y,m,1).getDay(); const days=new Date(y,m+1,0).getDate()
   const dias=['D','L','M','M','J','V','S']
   return <>
-    <section className="hero"><div><span className="eyebrow">ATLOS · CONTROL TOTAL</span><h2>Bienvenido/a, <em>{usuario}</em></h2><p>Gestión de Gimnasios ATLOS — v37 web</p></div><img src={logo} alt="" className="hero-badge-img" onError={e=>e.currentTarget.style.display='none'}/></section>
+    <section className="hero"><div><span className="eyebrow">ATLOS · CONTROL TOTAL</span><h2>Bienvenido/a, <em>{usuario}</em></h2><p>Gestión de Gimnasios ATLOS — v37 web</p></div><img src="/logo.png" alt="" width="256" height="175" className="hero-badge-img" onError={e=>e.currentTarget.style.display='none'}/></section>
     <div className="cards">
-      <div className="stat green"><div className="stat-icon">👥</div><span>Alumnos</span><strong>{stats.total}</strong><small>{stats.conRutina} con rutina</small></div>
-      <div className="stat blue"><div className="stat-icon">🏋</div><span>Asist. hoy</span><strong>{stats.today}</strong><small>Presentes</small></div>
-      <div className="stat orange"><div className="stat-icon">$</div><span>Ingresos mes</span><strong>{money(stats.revenue)}</strong><small>{stats.totalPagos} pagos</small></div>
-      <div className="stat purple"><div className="stat-icon">📋</div><span>Ejercicios</span><strong>{stats.totalEj}</strong><small>Cargados</small></div>
+      <div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos</span><strong>{stats.total}</strong><small>{stats.conRutina} con rutina</small></div>
+      <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Asist. hoy</span><strong>{stats.today}</strong><small>Presentes</small></div>
+      <div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>Ingresos mes</span><strong>{money(stats.revenue)}</strong><small>{stats.totalPagos} pagos</small></div>
+      <div className="stat purple"><div className="stat-icon" aria-hidden="true">📋</div><span>Ejercicios</span><strong>{stats.totalEj}</strong><small>Cargados</small></div>
     </div>
     <div className="grid2">
       <div style={{display:'grid',gap:16}}>

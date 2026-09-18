@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import useClock from '../hooks/useClock.js'
 import { parseFecha } from '../utils/helpers.js'
-import logo from '../assets/logo.png'
 
 
 export default function VistaAsistencia({students,payments=[],onCheckin,refresh}){
@@ -33,7 +32,7 @@ export default function VistaAsistencia({students,payments=[],onCheckin,refresh}
   }
   return <div style={{background:'#020617',margin:'-28px -24px -50px',padding:0,minHeight:'calc(100vh - 60px)',display:'flex',flexDirection:'column',color:'#F8FAFC'}}>
     <div style={{flex:1,display:'grid',placeItems:'center',padding:24,textAlign:'center',alignContent:'center',gap:12}}>
-      <img src={logo} alt="" style={{width:160,opacity:.95}} onError={e=>e.currentTarget.style.display='none'}/>
+      <img src="/logo.png" alt="" width="256" height="175" style={{width:160,opacity:.95}} onError={e=>e.currentTarget.style.display='none'}/>
       <div style={{letterSpacing:'.22em',fontSize:11,color:'var(--accent)',fontWeight:800}}>CONTROL DE ACCESO</div>
       <div style={{fontSize:17,minHeight:42,lineHeight:'1.4',fontWeight:700, padding:'10px 14px',borderRadius:10, background: msg.includes('Bienvenido')?'rgba(34,197,94,.12)': msg.startsWith('✗')?'rgba(239,68,68,.12)':'transparent', border: msg.includes('Bienvenido')?'1px solid rgba(34,197,94,.3)': msg.startsWith('✗')?'1px solid rgba(239,68,68,.3)':'1px solid transparent', color: msg.includes('Bienvenido')?'#22C55E': msg.startsWith('✗')?'#EF4444':'#94A3B8', maxWidth:560}}>{preview?`→ ${preview.name} · DNI ${preview.dni||'—'}`: msg || 'Ingresa tu DNI'}</div>
       <div style={{textAlign:'center',marginTop:6}}>

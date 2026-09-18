@@ -16,11 +16,11 @@ export default function VistaReportes({payments,students,clases,ejercicios,atten
   const COLORS=['#168FE8','#22C55E','#F59E0B','#EF4444','#6366F1','#06B6D4']
   return <div style={{display:'grid',gap:16}}>
     <div className="panel"><h3 style={{margin:0,color:'var(--accent)',letterSpacing:'.12em'}}>RESUMEN GENERAL</h3><div className="cards">
-      <div className="stat green"><div className="stat-icon">👥</div><span>Alumnos</span><strong>{totalAlumnos}</strong></div>
-      <div className="stat orange"><div className="stat-icon">$</div><span>Total pagos</span><strong>{money(totalPagos)}</strong></div>
-      <div className="stat blue"><div className="stat-icon">🏋</div><span>Ejercicios</span><strong>{ejercicios.length}</strong></div>
-      <div className="stat pink"><div className="stat-icon">✓</div><span>Presentes hoy</span><strong>{presentesHoy}</strong></div>
-      <div className="stat purple"><div className="stat-icon">🗓</div><span>Clases</span><strong>{clases.length}</strong></div>
+      <div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos</span><strong>{totalAlumnos}</strong></div>
+      <div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>Total pagos</span><strong>{money(totalPagos)}</strong></div>
+      <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Ejercicios</span><strong>{ejercicios.length}</strong></div>
+      <div className="stat pink"><div className="stat-icon" aria-hidden="true">✓</div><span>Presentes hoy</span><strong>{presentesHoy}</strong></div>
+      <div className="stat purple"><div className="stat-icon" aria-hidden="true">🗓</div><span>Clases</span><strong>{clases.length}</strong></div>
     </div></div>
     <div className="grid2">
       <section className="panel"><PanelTitle title="Pagos por método"/><div className="rows">{Object.entries(porMetodo).map(([k,v])=><div className="row" key={k}><div className="miniavatar">$</div><div className="grow"><b>{k}</b></div><strong>{money(v)}</strong></div>)}{!Object.keys(porMetodo).length&&<Empty text="Sin datos"/>}</div></section>

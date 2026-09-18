@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { api, setGymHWID } from '../services/api'
 import { genGymCode } from '../utils/helpers.js'
-import logo from '../assets/logo.png'
 
 
 export default function GymGate({onOk}){
@@ -9,7 +8,7 @@ export default function GymGate({onOk}){
   const copy=async()=>{ const v=codigo.trim().toUpperCase()||genGymCode(); setCodigo(v); try{ await navigator.clipboard.writeText(v); setCopied(true); setTimeout(()=>setCopied(false),1500) }catch(e){ alert('No se pudo copiar: '+e.message) } }
   const verificar=async(e)=>{ e.preventDefault(); const c=codigo.trim().toUpperCase(); if(!c) return alert('Ingresá el código del gimnasio'); setLoading(true); setErr(null); try{ const r=await api.checkLicencia(c); if(r && r.activo){ setGymHWID(c); if(onOk) onOk(); } else setErr('Licencia inválida o vencida — comunicate con ATLOS'); }catch(e){ setErr('Licencia inválida o vencida — comunicate con ATLOS'); } setLoading(false) }
   return <div className="login-shell"><div className="login-card">
-    <img src={logo} alt="ATLOS" className="login-logo" onError={e=>e.currentTarget.style.display='none'} />
+    <img src="/logo.png" alt="ATLOS" width="256" height="175" className="login-logo" onError={e=>e.currentTarget.style.display='none'} />
     <h1>ATLOS</h1><p className="subtitle">GESTIÓN DE GIMNASIO</p>
     <p>Para activar esta PC necesitás el <b>código del gimnasio (HWID)</b> que te entrega ATLOS.</p>
     <form className="form" onSubmit={verificar} style={{gap:16}}>
