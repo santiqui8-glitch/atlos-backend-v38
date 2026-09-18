@@ -13,7 +13,8 @@ const NS_TO_IDB = [
   ['library', 'library'],
 ]
 
-let lastVersion = null
+// V39-13B: última versión de sync POR tenant (un gym no hereda ni bloquea el pull de otro).
+let lastVersions = {}
 let timer = null
 let emitChange = null
 let cleanupOnline = null
@@ -197,22 +198,24 @@ async function verify() {
   if(verifying){ try{ console.log('[sync] verify in-flight, skipped') }catch{} return }
   verifying=true;
   // Snapshot ANTES de la primera petición; si el tenant cambia mid-flight se
-  // descarta el pull/emit (fail-closed). lastVersion solo avanza sin drift.
+  // descarta el pull/emit (fail-closed). La versión solo avanza sin drift y
+  // por tenant (lastVersions).
   const ctxTenant=getCurrentTenant();
   const drifted=()=>getCurrentTenant()!==ctxTenant;
+  const lastVer=ctxTenant?(lastVersions[ctxTenant] ?? null):null;
   try {
     sanitizeQueue()
     if (navigator.onLine) await flushQueue().catch(() => {})
     const data = await api.syncVersion().catch(() => null)
     const ver = data && data.version
     if(drifted()){ try{ console.warn('[sync] tenant drift, verify discarded') }catch{} return }
-    if (ver && ver !== lastVersion) {
-      lastVersion = ver
+    if (ver && ver !== lastVer) {
+      if(ctxTenant) lastVersions[ctxTenant] = ver
       await pullAll()
       if(drifted()){ try{ console.warn('[sync] tenant drift, emit skipped') }catch{} return }
       if (typeof emitChange === 'function') emitChange()
-    } else if (lastVersion === null && navigator.onLine) {
-      lastVersion = ver || 'initial'
+    } else if (lastVer === null && navigator.onLine) {
+      if(ctxTenant) lastVersions[ctxTenant] = ver || 'initial'
       await pullAll()
       if(drifted()){ try{ console.warn('[sync] tenant drift, emit skipped') }catch{} return }
       if (typeof emitChange === 'function') emitChange()
@@ -245,7 +248,7 @@ export function stopSync() {
   if (cleanupOnline) { cleanupOnline(); cleanupOnline = null }
   if (cleanupVisibility) { cleanupVisibility(); cleanupVisibility = null }
   emitChange = null
-  lastVersion = null
+  lastVersions = {}
 }
 
 export function syncNow() {

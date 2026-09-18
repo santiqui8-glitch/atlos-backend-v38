@@ -62,8 +62,9 @@ export function tenantSetJSON(baseKey, value){
 // V39-09B-3: borra las entidades locales namespaced del tenant vigente
 // (clases/profesores/inscripciones/library). Legacy global intacto (cuarentena).
 // V39-10: se incluye 'alumnos-ext' (ya namespaced vía tenantGetJSON/SetJSON).
+// V39-13B: se incluye 'gymconf' (config del gym, namespaced).
 // No toca cola, IDB, auth ni sesión. Devuelve la cantidad de claves eliminadas.
-const ENTITY_BASES=['clases','profesores','inscripciones','library','alumnos-ext'];
+const ENTITY_BASES=['clases','profesores','inscripciones','library','alumnos-ext','gymconf'];
 
 // V39-12B: tombstones acotados. Al agregar un ID a deleted-* se deduplica y se
 // aplica tope FIFO (defecto 500) para que la lista no crezca indefinidamente.

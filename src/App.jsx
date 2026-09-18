@@ -265,7 +265,7 @@ export default function App(){
   const [licencia,setLicencia]=useState(null)
   useEffect(()=>{ if(logged){ if(!isTokenValid()){ clearAuth(); setLogged(false); return } api.me().then(u=>{       if(u?.rol){ setRol(u.rol); localStorage.setItem('atlos-rol',u.rol)} if(u?.usuario){ setUsuario(u.usuario); localStorage.setItem('atlos-usuario',u.usuario) }
     }).catch(e=>{ const msg=String(e.message||''); if(msg.includes('No autorizado')||msg.includes('expirada')||msg.includes('401')||msg.includes('403')){ clearAuth(); setLogged(false) } })
-    api.getGymConfig().then(cfg=>{ if(cfg && typeof cfg==='object'){ setGymConf(cfg); localStorage.setItem('atlos-gymconf', JSON.stringify(cfg)) } }).catch(()=>{ const local=JSON.parse(localStorage.getItem('atlos-gymconf')||'null'); if(local) setGymConf(local) })
+    api.getGymConfig().then(cfg=>{ if(cfg && typeof cfg==='object'){ setGymConf(cfg); tenantSetJSON('gymconf',cfg) } }).catch(()=>{ const local=tenantGetJSON('gymconf',null); if(local) setGymConf(local) })
   } },[])
   useEffect(()=>{ if(!logged) return; const checkLic=async()=>{ try{ const lic=await api.checkLicencia(); setLicencia(lic); if(!lic.activo){ console.warn('Licencia vencida',lic) } }catch{} }; checkLic(); const t=setInterval(checkLic, 5*60*1000); return ()=>clearInterval(t) },[logged])
   if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol)){
