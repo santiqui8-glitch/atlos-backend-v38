@@ -1,2 +1,6 @@
 .vercel
 .env*
+# V40-02: build output y dependencias fuera del control de versiones.
+dist/
+node_modules/
+coverage/
