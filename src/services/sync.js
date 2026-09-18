@@ -4,11 +4,13 @@ import { tenantKey, tenantGetJSON } from './tenant';
 
 const QUEUE_KEY = 'atlos-queue' // V39-04B: legacy/quarantine. Solo flushQueue la lee para avisar; nada la escribe.
 const SYNC_INTERVAL = 60000
-const LEGACY_TO_IDB = [
-  ['atlos-clases', 'clases'],
-  ['atlos-inscripciones', 'inscripciones'],
-  ['atlos-profesores', 'profesores'],
-  ['atlos-library', 'library'],
+// V39-09B-3: espejo desde claves namespaced por tenant. Legacy global en
+// cuarentena: NO se lee ni se migra (evita contaminación entre gyms).
+const NS_TO_IDB = [
+  ['clases', 'clases'],
+  ['inscripciones', 'inscripciones'],
+  ['profesores', 'profesores'],
+  ['library', 'library'],
 ]
 
 let lastVersion = null
@@ -72,9 +74,9 @@ export function sanitizeQueue() {
 // Los datos pesados que históricamente vivían en localStorage quedan espejados en IndexedDB.
 // Se mantiene la escritura en localStorage para no romper a las páginas que todavía leen ahí.
 async function mirrorLocalStorageToIdb() {
-  for (const [key, storeName] of LEGACY_TO_IDB) {
+  for (const [base, storeName] of NS_TO_IDB) {
     try {
-      const rows = JSON.parse(localStorage.getItem(key) || '[]')
+      const rows = tenantGetJSON(base,[])
       if (Array.isArray(rows) && rows.length) {
         const delIds = storeName==='clases' ? readDeletedIds('deleted-clases') : storeName==='profesores' ? readDeletedIds('deleted-profesores') : null
         const clean = rows.filter(x => x && x.id !== undefined && !(delIds && delIds.has(String(x.id)))).map(x => ({ ...x, id: String(x.id) }))

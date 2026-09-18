@@ -42,10 +42,10 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
     for(const a of await list('attendance')){ if(String(a.studentId)===String(target.id)) await remove('attendance',a.id) }
     // BLOQUE 4P: cascada local — borrar inscripciones del alumno eliminado.
     try{
-      const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _ins=tenantGetJSON('inscripciones',[]);
       const _ids=[target.id,target.serverId].filter(Boolean).map(String);
       const _f=_ins.filter(x=>!_ids.includes(String(x.alumno_id??'')));
-      if(_f.length!==_ins.length) localStorage.setItem('atlos-inscripciones',JSON.stringify(_f));
+      if(_f.length!==_ins.length) tenantSetJSON('inscripciones',_f);
     }catch{}
     setSel(null); refresh()
   }

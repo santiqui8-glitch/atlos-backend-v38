@@ -32,7 +32,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
         if(_f.length!==_q.length) writeTenantQueue(_f)
       }
     }catch{}
-    const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); localStorage.setItem('atlos-profesores',JSON.stringify(filt))
+    const arr=tenantGetJSON('profesores',[]); const filt=arr.filter(x=>String(x.id)!==String(selected.id)); tenantSetJSON('profesores',filt)
     try{ await remove('profesores',selected.id).catch(()=>{}); await remove('profesores',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('profesores',String(selected.serverId)).catch(()=>{}) }catch{}
     const del=tenantGetJSON('deleted-profesores',[]); del.push(String(selected.id)); tenantSetJSON('deleted-profesores',del)
     setSel(null); refresh()
@@ -40,14 +40,14 @@ export default function VistaProfesores({profesores,onNew,refresh}){
   const handleEdit=()=>{ if(!selected) return alert('Seleccioná un profesor.'); setEdit(selected) }
   const saveEdit=async(e)=>{
     e.preventDefault(); const f=new FormData(e.currentTarget); const nombre=f.get('nombre')?.trim(); const apellido=f.get('apellido')?.trim(); const telefono=f.get('telefono')?.trim(); const especialidad=f.get('especialidad')?.trim()||'General'; if(!nombre||!apellido) return alert('Nombre y apellido requeridos')
-    const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const idx=arr.findIndex(x=>String(x.id)===String(edit.id))
+    const arr=tenantGetJSON('profesores',[]); const idx=arr.findIndex(x=>String(x.id)===String(edit.id))
     const updated={...(arr[idx]||edit), nombre, apellido, telefono, especialidad, nombreCompleto:`${nombre} ${apellido}`}
     const prevRec=idx>=0?arr[idx]:null;
-    if(idx>=0){ arr[idx]=updated; localStorage.setItem('atlos-profesores',JSON.stringify(arr)) }
+    if(idx>=0){ arr[idx]=updated; tenantSetJSON('profesores',arr) }
     if(updated.serverId){
       // ENDPOINT ESPERADO: PUT /profesores/{id}. Primero la API; solo si falla la red se encola.
       try{ await api.actualizarProfesor(updated.serverId, {nombre, apellido, telefono, especialidad}) }
-      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}); else if(prevRec){ try{ const _a=JSON.parse(localStorage.getItem('atlos-profesores')||'[]'); const _i=_a.findIndex(x=>String(x.id)===String(edit.id)); if(_i>=0){ _a[_i]=prevRec; localStorage.setItem('atlos-profesores',JSON.stringify(_a)) } }catch{} } }
+      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}); else if(prevRec){ try{ const _a=tenantGetJSON('profesores',[]); const _i=_a.findIndex(x=>String(x.id)===String(edit.id)); if(_i>=0){ _a[_i]=prevRec; tenantSetJSON('profesores',_a) } }catch{} } }
     }
     setEdit(null); refresh()
   }

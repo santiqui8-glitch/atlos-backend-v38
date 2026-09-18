@@ -58,3 +58,18 @@ export function tenantSetJSON(baseKey, value){
   if(!key){ try{ console.warn('[tenant] no tenant, write skipped',baseKey) }catch{} return false }
   try{ localStorage.setItem(key,JSON.stringify(value)); return true }catch(err){ console.warn('[tenant] write failed',baseKey,err?.message||err); return false }
 }
+
+// V39-09B-3: borra las entidades locales namespaced del tenant vigente
+// (clases/profesores/inscripciones/library). Legacy global intacto (cuarentena).
+// No toca cola, IDB, auth ni sesión. Devuelve la cantidad de claves eliminadas.
+const ENTITY_BASES=['clases','profesores','inscripciones','library'];
+export function clearTenantEntityData(){
+  const tenant=getCurrentTenant();
+  if(!tenant) return 0;
+  let n=0;
+  for(const base of ENTITY_BASES){
+    const key=`${NS_PREFIX}:${tenant}:${base}`;
+    try{ if(localStorage.getItem(key)!=null){ localStorage.removeItem(key); n++ } }catch{}
+  }
+  return n;
+}

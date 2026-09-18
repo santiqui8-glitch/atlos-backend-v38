@@ -1,5 +1,5 @@
 import { list, put, remove } from './db';
-import { getCurrentTenant, tenantKey } from './tenant';
+import { getCurrentTenant, tenantKey, tenantGetJSON, tenantSetJSON } from './tenant';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://atlos-api-production.up.railway.app';
 
@@ -232,7 +232,7 @@ async function flushAlumnoCrear(item){
 async function flushProfesorCrear(item){
   const _pl=(item&&item.payload)||{};
   const lid=String(_pl._localId||_pl.id||'')
-  const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
+  const arr=tenantGetJSON('profesores',[])
   const rec=arr.find(x=>String(x.id)===lid)
   if(!rec) throw new Error('profesor local no encontrado para sincronizar')
   const r=await api.crearProfesor({nombre:rec.nombre, apellido:rec.apellido, telefono:rec.telefono||'', especialidad:rec.especialidad||'General'},FLUSH_OPTS)
@@ -242,10 +242,10 @@ async function flushProfesorCrear(item){
   if(!sid) return {ok:false, code:'no-server-id', lid, sid:null}
   const nsid=String(sid)
   try{
-    const arr2=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
+    const arr2=tenantGetJSON('profesores',[])
     const idx=arr2.findIndex(x=>String(x.id)===lid)
     if(idx>=0){ arr2[idx]={...arr2[idx], id:nsid, serverId:nsid, pending:false} }
-    localStorage.setItem('atlos-profesores', JSON.stringify(arr2))
+    tenantSetJSON('profesores',arr2)
     return {ok:true, lid, sid:nsid}
   }catch(e){ console.warn('[flush] profesor reconcile',e?.message||e,lid); return {ok:false, code:'reconcile-error', lid, sid:nsid} }
 }
@@ -283,17 +283,17 @@ async function flushClaseCrear(item){
   if(!sid) return {ok:false, code:'no-server-id', lid, sid:null}
   const nsid=String(sid)
   try{
-    const arr=JSON.parse(localStorage.getItem('atlos-clases')||'[]')
+    const arr=tenantGetJSON('clases',[])
     const idx=arr.findIndex(c=>String(c.id)===String(lid))
     if(idx>=0){ arr[idx]={...arr[idx], id:nsid, pending:false, serverId:nsid} }
-    localStorage.setItem('atlos-clases',JSON.stringify(arr))
+    tenantSetJSON('clases',arr)
     // BLOQUE 4N: migrar inscripciones _localId → sid (solo con sid válido, como 4J-B).
     if(lid){
-      const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const ins=tenantGetJSON('inscripciones',[]);
       if(Array.isArray(ins)){
         let ch=false;
         for(const it of ins){ if(it&&String(it.clase_id??'')===String(lid)){ it.clase_id=nsid; ch=true } }
-        if(ch) localStorage.setItem('atlos-inscripciones',JSON.stringify(ins));
+        if(ch) tenantSetJSON('inscripciones',ins);
       }
     }
     return {ok:true, lid, sid:nsid}
@@ -474,11 +474,11 @@ export async function flushQueue(){
             try{
               const _cq=JSON.parse(localStorage.getItem(key)||'[]');
               if(Array.isArray(_cq)&&remapPendingAlumno(_cq,_r.lid,_r.sid)) localStorage.setItem(key,JSON.stringify(_cq));
-              const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+              const _ins=tenantGetJSON('inscripciones',[]);
               if(Array.isArray(_ins)){
                 let _ic=false;
                 for(const _x of _ins){ if(_x&&String(_x.alumno_id??'')===_r.lid){ _x.alumno_id=_r.sid; _ic=true } }
-                if(_ic) localStorage.setItem('atlos-inscripciones',JSON.stringify(_ins));
+                if(_ic) tenantSetJSON('inscripciones',_ins);
               }
             }catch(_e){ console.warn('[flush] alumno dependents storage',_e?.message||_e,_r.lid) }
           }
@@ -504,7 +504,7 @@ export async function flushQueue(){
       }
       else if(item.type==='profesor'){
         const _r=await flushProfesorCrear(item);
-        if(_r&&_r.ok){/* reconciliación completa (atlos-profesores ya actualizado) */}
+        if(_r&&_r.ok){/* reconciliación completa (profesores namespaced ya actualizado) */}
         else if(_r&&_r.code){ markReconcilePending(item, _r.code==='no-server-id'?'profesor: 2xx sin ID de servidor':'profesor: reconciliación local incompleta'); remain.push(item); }
         else remain.push(item);
       }

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 
 // BLOQUE 4F: guard de doble submit para guardar rutina.
@@ -13,10 +14,10 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
   const [s4,setS4]=useState([])
   const goal=(student?.enfoque||student?.goal||'hipertrofia').toLowerCase()
   const daysNum=Number(student?.days_per_week||student?.disponibilidad||3)||3
-  const [lib,setLib]=useState(()=> library.length?library: JSON.parse(localStorage.getItem('atlos-library')||'[]'))
+  const [lib,setLib]=useState(()=> library.length?library: tenantGetJSON('library',[]))
   const [qLib,setQLib]=useState('')
   const [openDrop,setOpenDrop]=useState(null)
-  useEffect(()=>{ if(!lib.length){ api.exercisesLibrary().then(d=>{ if(Array.isArray(d)&&d.length){ setLib(d); localStorage.setItem('atlos-library',JSON.stringify(d)) } else { const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'},{id:4,name:'Dominadas',focus:'hipertrofia',muscle_group:'Espalda'},{id:5,name:'Press militar',focus:'fuerza',muscle_group:'Hombros'},{id:6,name:'Curl bíceps',focus:'hipertrofia',muscle_group:'Brazos'}]; setLib(demo); localStorage.setItem('atlos-library',JSON.stringify(demo)) } }).catch(()=>{ const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'}]; if(!lib.length) setLib(demo) }) } },[])
+  useEffect(()=>{ if(!lib.length){ api.exercisesLibrary().then(d=>{ if(Array.isArray(d)&&d.length){ setLib(d); tenantSetJSON('library',d) } else { const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'},{id:4,name:'Dominadas',focus:'hipertrofia',muscle_group:'Espalda'},{id:5,name:'Press militar',focus:'fuerza',muscle_group:'Hombros'},{id:6,name:'Curl bíceps',focus:'hipertrofia',muscle_group:'Brazos'}]; setLib(demo); tenantSetJSON('library',demo) } }).catch(()=>{ const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'}]; if(!lib.length) setLib(demo) }) } },[])
   useEffect(()=>{
     const existing=routines.filter(r=>String(r.studentId||r.alumno_id)===String(student.id))
     if(existing.length){

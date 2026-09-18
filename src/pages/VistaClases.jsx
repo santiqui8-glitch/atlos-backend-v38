@@ -28,13 +28,13 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       const q=readTenantQueue()
       if(q) writeTenantQueue(q.filter(it=>!(it.type==='clase' && String(it.payload._localId||it.payload.id)===String(selected.id) && sameQueueContext(it))))
     }
-    const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const filt=local.filter(c=>String(c.id)!==String(selected.id)); localStorage.setItem('atlos-clases',JSON.stringify(filt))
+    const local=tenantGetJSON('clases',[]); const filt=local.filter(c=>String(c.id)!==String(selected.id)); tenantSetJSON('clases',filt)
     // BLOQUE 4P: cascada local — borrar inscripciones de la clase eliminada.
     try{
-      const _ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _ins=tenantGetJSON('inscripciones',[]);
       const _ids=[selected.id,selected.serverId].filter(Boolean).map(String);
       const _f=_ins.filter(x=>!_ids.includes(String(x.clase_id??'')));
-      if(_f.length!==_ins.length) localStorage.setItem('atlos-inscripciones',JSON.stringify(_f));
+      if(_f.length!==_ins.length) tenantSetJSON('inscripciones',_f);
     }catch{}
     try{ await remove('clases',selected.id).catch(()=>{}); await remove('clases',String(selected.id)).catch(()=>{}); if(selected.serverId && String(selected.serverId)!==String(selected.id)) await remove('clases',String(selected.serverId)).catch(()=>{}) }catch{}
     const del=tenantGetJSON('deleted-clases',[]); del.push(String(selected.id)); tenantSetJSON('deleted-clases',del)
@@ -63,11 +63,11 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     }
     // BLOQUE 4N: si el backend rechazó el PUT, no persistir el override como válido.
     if(!updateRejected){
-    // local fallback: actualizar en atlos-clases
-    const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const idx=local.findIndex(c=>String(c.id)===String(edit.id))
-    if(idx>=0){ local[idx]={...local[idx],...data}; localStorage.setItem('atlos-clases',JSON.stringify(local)) }
+    // local fallback: actualizar en clases namespaced
+    const local=tenantGetJSON('clases',[]); const idx=local.findIndex(c=>String(c.id)===String(edit.id))
+    if(idx>=0){ local[idx]={...local[idx],...data}; tenantSetJSON('clases',local) }
     else { // si era de la nube, crear override local
-      local.push({id:edit.serverId||edit.id, serverId:edit.serverId||null, pending:edit.pending||false, ...data, inscriptos: edit.inscriptos||0}); localStorage.setItem('atlos-clases',JSON.stringify(local))
+      local.push({id:edit.serverId||edit.id, serverId:edit.serverId||null, pending:edit.pending||false, ...data, inscriptos: edit.inscriptos||0}); tenantSetJSON('clases',local)
     }
     }
     setEdit(null); refresh()
@@ -84,14 +84,14 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       else {
       // local fallback: incrementar inscriptos (evita duplicar la misma inscripción)
       const _cf=today();
-      const _ins0=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]');
+      const _ins0=tenantGetJSON('inscripciones',[]);
       const _dup=Array.isArray(_ins0)&&_ins0.some(x=>String(x.clase_id)===String(selected.id)&&String(x.alumno_id)===String(alumnoId)&&String(x.fecha)===String(_cf));
       if(!_dup){
-      const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); const idx=local.findIndex(c=>String(c.id)===String(selected.id))
-      if(idx>=0){ local[idx].inscriptos=(Number(local[idx].inscriptos)||0)+1; localStorage.setItem('atlos-clases',JSON.stringify(local)) }
-      else { const cloudIdx=clases.findIndex(c=>String(c.id)===String(selected.id)); if(cloudIdx>=0){ const copy=[...clases]; copy[cloudIdx]={...copy[cloudIdx], inscriptos:(Number(copy[cloudIdx].inscriptos)||0)+1}; localStorage.setItem('atlos-clases',JSON.stringify(copy)) } }
+      const local=tenantGetJSON('clases',[]); const idx=local.findIndex(c=>String(c.id)===String(selected.id))
+      if(idx>=0){ local[idx].inscriptos=(Number(local[idx].inscriptos)||0)+1; tenantSetJSON('clases',local) }
+      else { const cloudIdx=clases.findIndex(c=>String(c.id)===String(selected.id)); if(cloudIdx>=0){ const copy=[...clases]; copy[cloudIdx]={...copy[cloudIdx], inscriptos:(Number(copy[cloudIdx].inscriptos)||0)+1}; tenantSetJSON('clases',copy) } }
       // guardar inscripción local para detalle
-      const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); ins.push({clase_id:selected.id, alumno_id:alumnoId, fecha:_cf}); localStorage.setItem('atlos-inscripciones',JSON.stringify(ins))
+      const ins=tenantGetJSON('inscripciones',[]); ins.push({clase_id:selected.id, alumno_id:alumnoId, fecha:_cf}); tenantSetJSON('inscripciones',ins)
       }
       }
     }

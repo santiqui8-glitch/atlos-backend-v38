@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useReducer } from 'react'
 import { list, put, remove, seed } from './services/db'
 import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems } from './services/api'
 import { startSync, stopSync } from './services/sync'
-import { tenantGetJSON, tenantSetJSON } from './services/tenant'
+import { tenantGetJSON, tenantSetJSON, clearTenantEntityData } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
 import logo from './assets/logo.png'
 import Login from './components/Login.jsx'
@@ -113,7 +113,7 @@ export default function App(){
       const a=aCloud? Array.from(new Map([...aCloud,...localA].map(x=>[String(x.id),x])).values()).filter(x=>!delAlumnos.has(String(x.studentId))) : localA.filter(x=>!delAlumnos.has(String(x.studentId)))
       const r=rCloud? Array.from(new Map([...rCloud,...localR].map(x=>[String(x.id),x])).values()) : localR
       const delClases=new Set(tenantGetJSON('deleted-clases',[]).map(String))
-      const localC=JSON.parse(localStorage.getItem('atlos-clases')||'[]')
+      const localC=tenantGetJSON('clases',[])
       let cRawMapped=[]
       if(Array.isArray(cRaw)){ cRawMapped=cRaw.map(j=>({id:j.id, nombre:j.nombre||j.name, dia_mes:j.dia_mes||j.dia, hora_inicio:j.hora_inicio||j.inicio, hora_fin:j.hora_fin||j.fin, capacidad:j.capacidad||j.cap, profesor:j.profesor||'', inscriptos:j.inscriptos||j.inscriptos_count||0})) }
       const mergedC=[...cRawMapped, ...localC]
@@ -121,10 +121,10 @@ export default function App(){
       let c=Array.from(mapC.values()).filter(x=>!delClases.has(String(x.id)))
       if(!Array.isArray(cRaw)) c=localC.filter(x=>!delClases.has(String(x.id)))
       // merge inscripciones locales al contador
-      try{ const ins=JSON.parse(localStorage.getItem('atlos-inscripciones')||'[]'); const cnt=new Map(); for(const it of ins){ const k=String(it.clase_id); cnt.set(k,(cnt.get(k)||0)+1)} const cc=[]; for(const x of c){ const y={}; for(const kk in x) y[kk]=x[kk]; y.inscriptos=(Number(x.inscriptos)||0)+(cnt.get(String(x.id))||0); cc.push(y) } c=cc }catch{}
+      try{ const ins=tenantGetJSON('inscripciones',[]); const cnt=new Map(); for(const it of ins){ const k=String(it.clase_id); cnt.set(k,(cnt.get(k)||0)+1)} const cc=[]; for(const x of c){ const y={}; for(const kk in x) y[kk]=x[kk]; y.inscriptos=(Number(x.inscriptos)||0)+(cnt.get(String(x.id))||0); cc.push(y) } c=cc }catch{}
       const e=Array.isArray(eRaw)?eRaw:null
       const delProfs=new Set(tenantGetJSON('deleted-profesores',[]).map(String))
-      const localProfs=JSON.parse(localStorage.getItem('atlos-profesores')||'[]').filter(x=>!delProfs.has(String(x.id)))
+      const localProfs=tenantGetJSON('profesores',[]).filter(x=>!delProfs.has(String(x.id)))
       // merge profesores nube + local (el registro de la nube tiene prioridad cuando llega con serverId)
       const profsCloud=Array.isArray(profsRaw)?profsRaw.map(j=>({id:String(j.id), serverId:String(j.id), nombre:j.nombre||j.name||'', apellido:j.apellido||'', telefono:j.telefono||'', especialidad:j.especialidad||'General', nombreCompleto:j.nombreCompleto||[j.nombre||j.name,j.apellido].filter(Boolean).join(' ').trim(), pending:false})):[]
       const profByKey=new Map()
@@ -236,7 +236,7 @@ export default function App(){
     if(navigator.onLine){
       try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}) } }
     } else { queuePush('clase',{...data,_localId:localId}); pendiente=true }
-    if(!ok){ const local=JSON.parse(localStorage.getItem('atlos-clases')||'[]'); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); localStorage.setItem('atlos-clases',JSON.stringify(local)) }
+    if(!ok){ const local=tenantGetJSON('clases',[]); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); tenantSetJSON('clases',local) }
     setModal(null); refresh() }finally{ savingClase=false } }
   const saveProfesor=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const nombre=f.get('nombre')?.trim(); const apellido=f.get('apellido')?.trim(); const telefono=f.get('telefono')?.trim(); const especialidad=f.get('especialidad')?.trim()||'General'; if(!nombre||!apellido) return alert('Nombre y apellido requeridos');
     if(savingProfesor) return; savingProfesor=true; try{
@@ -246,9 +246,9 @@ export default function App(){
       try{ const r=await api.crearProfesor({nombre, apellido, telefono:telefono||'', especialidad}); serverId=(r&&(r.id??r._id))||null }
       catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}) } }
     } else { queuePush('profesor', {_localId:localId}); pendiente=true }
-    const arr=JSON.parse(localStorage.getItem('atlos-profesores')||'[]')
+    const arr=tenantGetJSON('profesores',[])
     arr.push(serverId ? {...localRec, id:String(serverId), serverId:String(serverId), pending:false} : {...localRec, pending:pendiente})
-    localStorage.setItem('atlos-profesores',JSON.stringify(arr)); setModal(null); refresh() }finally{ savingProfesor=false } }
+    tenantSetJSON('profesores',arr); setModal(null); refresh() }finally{ savingProfesor=false } }
   const saveUsuario=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={usuario:f.get('usuario'), clave:f.get('clave'), rol:f.get('rol')||'Empleado'}; await api.crearUsuario(data); setModal(null); refresh() }
 
   const filtered=useMemo(()=> students.filter(s=>`${s.name} ${s.dni}`.toLowerCase().includes(query.toLowerCase())), [students,query])
@@ -262,7 +262,7 @@ export default function App(){
   } },[])
   useEffect(()=>{ if(!logged) return; const checkLic=async()=>{ try{ const lic=await api.checkLicencia(); setLicencia(lic); if(!lic.activo){ console.warn('Licencia vencida',lic) } }catch{} }; checkLic(); const t=setInterval(checkLic, 5*60*1000); return ()=>clearInterval(t) },[logged])
   if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol)){
-    return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
+    return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearTenantEntityData(); clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
   }
   if(!logged){
     const gymHwid=getGymHWID();
@@ -319,7 +319,7 @@ export default function App(){
             <div style={{padding:'8px 12px',textAlign:'center'}}><button className="ghost" style={{width:'100%',fontSize:11}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>
           </div>}
         </div>
-        <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
+        <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} onNew={()=>setModal('payment')} refresh={refresh}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
