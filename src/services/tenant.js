@@ -61,8 +61,9 @@ export function tenantSetJSON(baseKey, value){
 
 // V39-09B-3: borra las entidades locales namespaced del tenant vigente
 // (clases/profesores/inscripciones/library). Legacy global intacto (cuarentena).
+// V39-10: se incluye 'alumnos-ext' (ya namespaced vía tenantGetJSON/SetJSON).
 // No toca cola, IDB, auth ni sesión. Devuelve la cantidad de claves eliminadas.
-const ENTITY_BASES=['clases','profesores','inscripciones','library'];
+const ENTITY_BASES=['clases','profesores','inscripciones','library','alumnos-ext'];
 export function clearTenantEntityData(){
   const tenant=getCurrentTenant();
   if(!tenant) return 0;
