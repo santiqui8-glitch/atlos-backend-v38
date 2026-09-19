@@ -114,7 +114,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       <div style={{maxHeight:380,overflow:'auto'}}>
         {clases.map(c=>{
           const isSel=String(sel)===String(c.id)
-          return <div key={c.id} onClick={()=>setSel(c.id)} onDoubleClick={handleEdit} className={isSel?'trow sel clases':'trow clases'}>
+          return <div key={c.id} onClick={()=>setSel(c.id)} onDoubleClick={handleEdit} className={isSel?'trow sel clases':'trow clases'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(c.id)}}}>
             <span style={{fontFamily:'monospace'}} className="muted-text">{String(c.id).slice(0,6)}</span><span><b>{c.nombre||c.name}</b></span><span>{c.dia_mes||c.dia||'-'}</span><span>{c.hora_inicio||c.inicio||'-'}</span><span>{c.hora_fin||c.fin||'-'}</span><span>{c.capacidad||c.cap||'-'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.profesor||'—'}</span><span style={{fontWeight:700,textAlign:'center'}}>{c.inscriptos||c.inscriptos_count||0}</span>
           </div>
         })}
@@ -122,7 +122,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
         {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',borderTop:'1px solid var(--card-border)'}}>Seleccionado: {selected.nombre||selected.name} · Doble click para editar · INSCRIBIR para anotar alumno</div>}
       </div>
     </div>
-    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Clase</h3><button onClick={()=>setEdit(null)}>×</button></div>
+    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Clase</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={saveEdit} onKeyDown={onEnterNext} className="form">
         <label>Nombre de la clase<input name="nombre" defaultValue={edit.nombre||edit.name} required/></label>
         <div className="form2"><label>Día<select name="dia" defaultValue={edit.dia_mes||edit.dia||'Lunes'} required><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></label><label>Profesor<select name="profesor" defaultValue={edit.profesor||''} required><option value="">Seleccionar...</option>{profesores.map(p=><option key={p.id} value={p.nombreCompleto||`${p.nombre} ${p.apellido}`}>{p.nombreCompleto||`${p.nombre} ${p.apellido}`} — {p.especialidad}</option>)}{!profesores.length&&<option disabled>No hay profesores — cargalos en Profesores</option>}</select></label></div>
@@ -131,7 +131,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
         <button className="primary wide">GUARDAR CAMBIOS</button>
       </form>
     </div></div>}
-    {inscribir&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setInscribir(null)}}><div className="modal"><div className="modal-head"><h3>Inscribir a {inscribir.nombre||inscribir.name}</h3><button onClick={()=>setInscribir(null)}>×</button></div>
+    {inscribir&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setInscribir(null)}}><div className="modal"><div className="modal-head"><h3>Inscribir a {inscribir.nombre||inscribir.name}</h3><button onClick={()=>setInscribir(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={doInscribir} onKeyDown={onEnterNext} className="form">
         <label>Alumno<select name="alumno" required><option value="">Seleccionar...</option>{students.map(s=><option key={s.id} value={s.id}>{s.name} — DNI {s.dni||'—'}</option>)}</select></label>
         <button className="primary wide">INSCRIBIR</button>

@@ -6,9 +6,11 @@ import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../uti
 import { Empty } from '../components/ui.jsx'
 
 
+const PAGE_SIZE=50;
 export default function VistaGestion({payments,students,stats,rol,onNew,refresh}){
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null) // pago a editar
+  const [visibles,setVisibles]=useState(PAGE_SIZE) // V43-04: lista larga paginada local
   const selected=payments.find(p=>String(p.id)===String(sel))
   const totalMes=payments.filter(p=>isSameMonth(p.date, today())).reduce((a,b)=>a+Number(b.amount||0),0)
   const handleDelete=async()=>{
@@ -78,18 +80,19 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
       <div className="thead gestion"><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>
       <div style={{maxHeight:420,overflow:'auto'}}>
-        {payments.slice().reverse().map(p=>{
+        {payments.slice().reverse().slice(0,visibles).map(p=>{
           const s=students.find(x=>String(x.id)===String(p.studentId))
           const isSel=String(sel)===String(p.id)
-          return <div key={p.id} onClick={()=>setSel(p.id)} className={isSel?'trow sel gestion':'trow gestion'}>
+          return <div key={p.id} onClick={()=>setSel(p.id)} className={isSel?'trow sel gestion':'trow gestion'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(p.id)}}}>
             <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span style={{fontSize:12}}>{toDisplay(p.date)}</span><span><b>{p.alumnoNombre||s?.name||'—'}</b></span><span>{p.note||'Cuota Mensual'}</span><span className="num" style={{fontWeight:700}}>{money(p.amount)}</span><span>{p.metodo||'Efectivo'}</span>
           </div>
         })}
         {!payments.length&&<Empty text="No hay pagos. Registrá el primero."/>}
+        {visibles<payments.length&&<button className="ghost" style={{marginTop:10,width:'100%'}} onClick={()=>setVisibles(v=>v+PAGE_SIZE)}>Ver más ({payments.length-visibles} restantes)</button>}
         {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',borderTop:'1px solid var(--card-border)',background:'var(--selected)'}}>Seleccionado: ID #{String(selected.id).slice(0,6)} · Click en otro para cambiar · Doble click afuera deselecciona</div>}
       </div>
     </div>
-    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Pago</h3><button onClick={()=>setEdit(null)}>×</button></div>
+    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Pago</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={saveEdit} onKeyDown={onEnterNext} className="form">
         <label>Alumno<select name="alumno" defaultValue={edit.studentId} required>{students.map(a=><option key={a.id} value={a.id}>{a.name} (ID: {String(a.id).slice(0,6)})</option>)}</select></label>
         <label>Monto ($)<input name="monto" type="number" step="0.01" defaultValue={edit.amount} required/></label>

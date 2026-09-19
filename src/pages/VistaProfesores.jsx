@@ -58,7 +58,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
       <div style={{maxHeight:380,overflow:'auto'}}>
         {profesores.map(p=>{
           const isSel=String(sel)===String(p.id)
-          return <div key={p.id} onClick={()=>setSel(p.id)} onDoubleClick={handleEdit} className={isSel?'trow sel profesores':'trow profesores'}>
+          return <div key={p.id} onClick={()=>setSel(p.id)} onDoubleClick={handleEdit} className={isSel?'trow sel profesores':'trow profesores'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(p.id)}}}>
             <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span><b>{p.nombre}</b></span><span>{p.apellido}</span><span>{p.telefono||'—'}</span><span><span style={{background:'rgba(99,102,241,.12)',color:'var(--info)',padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>{p.especialidad}</span></span>
           </div>
         })}
@@ -66,7 +66,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
         {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',borderTop:'1px solid var(--card-border)'}}>Seleccionado: {selected.nombreCompleto||`${selected.nombre} ${selected.apellido}`} · Doble click para editar</div>}
       </div>
     </div>
-    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Profesor</h3><button onClick={()=>setEdit(null)}>×</button></div>
+    {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Profesor</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={saveEdit} onKeyDown={onEnterNext} className="form">
         <div className="form2"><label>Nombre*<input name="nombre" defaultValue={edit.nombre} required/></label><label>Apellido*<input name="apellido" defaultValue={edit.apellido} required/></label></div>
         <label>Teléfono<input name="telefono" defaultValue={edit.telefono||''}/></label>
