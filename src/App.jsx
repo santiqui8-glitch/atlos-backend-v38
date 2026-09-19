@@ -87,7 +87,7 @@ export default function App(){
       ])
       const localS=await list('students'); const localP=await list('payments'); const localA=await list('attendance'); const localR=await list('routines')
       const sCloud=Array.isArray(sRaw)?sRaw.map(j=>({id:String(j.id),name:j.nombre||j.name||'Sin nombre',dni:j.dni||j.telefono||'',phone:j.telefono||j.phone||'',joinedAt:j.fecha_ingreso||j.joinedAt||today(),status:j.status||'activo',edad:j.edad||null,email:j.email||'', experience:j.experience||'principiante', goal:j.goal||j.enfoque||'hipertrofia', days_per_week:j.days_per_week||3, notes:j.notes||''})):null
-      const pCloud=Array.isArray(pRaw)?pRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),amount:j.monto??j.amount??0,date:j.fecha||j.date||today(),note:j.concepto||j.note||'',metodo:j.metodo||'Efectivo',alumnoNombre:j.alumno_nombre||j.alumno||null})):null
+      const pCloud=Array.isArray(pRaw)?pRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),amount:j.monto??j.amount??0,date:(j.fecha||j.date||''),note:j.concepto||j.note||'',metodo:j.metodo||'Efectivo',alumnoNombre:j.alumno_nombre||j.alumno||null})):null
       const aCloud=Array.isArray(aRaw)?aRaw.map(j=>({id:j.id,studentId:String(j.alumno_id||j.studentId),date:j.fecha||j.date||today(),time:j.hora_entrada||j.time||'',activo:j.activo,alumnoNombre:j.alumno_nombre})):null
       const rCloud=Array.isArray(rRaw)?rRaw:null
       const delAlumnos=new Set(tenantGetJSON('deleted-alumnos',[]).map(String))

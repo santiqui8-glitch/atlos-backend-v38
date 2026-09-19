@@ -9,7 +9,9 @@ export default function VistaReportes({payments,students,clases,ejercicios,atten
   const totalPagos=payments.reduce((a,b)=>a+Number(b.amount||0),0)
   const presentesHoy=attendance.filter(a=> toISO(a.date)===today()).length
   const porMetodo=payments.reduce((acc,p)=>{const m=p.metodo||'Efectivo'; acc[m]=(acc[m]||0)+Number(p.amount||0); return acc}, {})
-  const porMes=payments.reduce((acc,p)=>{const mes=toISO(p.date).slice(0,7); if(mes) acc[mes]=(acc[mes]||0)+Number(p.amount||0); return acc}, {})
+  // V42-03: la fecha cruda manda; '' (fecha desconocida) se excluye del gráfico
+  // pero sigue sumando al total general. toISO('') devolvería hoy (falso positivo).
+  const porMes=payments.reduce((acc,p)=>{ if(!p.date) return acc; const raw=toISO(p.date).slice(0,7); const mes=/^\d{4}-\d{2}$/.test(raw)?raw:null; if(mes) acc[mes]=(acc[mes]||0)+Number(p.amount||0); return acc}, {})
   const recientes=students.slice(-5).reverse()
   const chartMes=Object.entries(porMes).sort((a,b)=>a[0].localeCompare(b[0])).slice(-6).map(([mes,total])=>({mes:mes.slice(0,7), total}))
   const chartMetodo=Object.entries(porMetodo).map(([name,value])=>({name,value}))
