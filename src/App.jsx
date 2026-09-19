@@ -309,7 +309,7 @@ export default function App(){
   return <div className="app">
     <aside className="sidebar">
       <div className="brand"><div className="brand-logo"><img src="/logo.png" alt="ATLOS" width="256" height="175" onError={e=>{e.currentTarget.style.display='none'; const fb=e.currentTarget.nextSibling; if(fb) fb.style.display='grid'}}/><div className="logo-fallback" style={{display:'none'}}>A</div></div><div><b>ATLOS</b><span>Gestión de gimnasios</span></div></div>
-      <nav>{nav.map(([id,ic,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)}><span>{ic}</span>{label}</button>)}</nav>
+      <nav>{nav.map(([id,ic,label])=><button key={id} className={page===id?'active':''} onClick={()=>setPage(id)} title={label} aria-label={label} aria-current={page===id?'page':undefined}><span aria-hidden="true">{ic}</span>{label}</button>)}</nav>
       <div className="sidebar-foot"><div className={`status ${online?'on':'off'}`}></div><div><b>{online?'Online':'Modo offline'}</b><span>{usuario} · {rol}</span></div></div>
     </aside>
     <main className="main">
