@@ -88,11 +88,11 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       <div style={{display:'flex',gap:8}}>
         <button className="primary" onClick={onNew}>+ NUEVO ALUMNO</button>
         <button className="ghost" onClick={handleEdit}>EDITAR</button>
-        <button className="ghost" onClick={handleDelete} style={{color:'var(--danger)',borderColor:'var(--danger)'}}>ELIMINAR</button>
+        <button className="ghost danger" onClick={handleDelete}>ELIMINAR</button>
       </div>
     </div>
     <div style={{display:'flex',gap:12,marginTop:14,alignItems:'center'}}>
-      <div style={{flex:1,position:'relative'}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--muted)'}}>🔍</span><input style={{width:'100%',padding:'11px 12px 11px 32px',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10}} placeholder="Buscar alumno..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+      <div style={{flex:1,position:'relative'}}><span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--muted)'}}>🔍</span><input className="field-search" aria-label="Buscar alumno" placeholder="Buscar alumno..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
       <span style={{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}}>{students.length} alumnos</span>
     </div>
     <div className="cards" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:12}}><div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>ALUMNOS</span><strong>{stats.total}</strong></div><div className="stat orange"><div className="stat-icon" aria-hidden="true">📋</div><span>CON RUTINA</span><strong>{stats.conRutina}</strong></div><div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>EJERCICIOS</span><strong>{stats.totalEj}</strong></div></div>

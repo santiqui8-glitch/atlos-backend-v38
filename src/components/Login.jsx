@@ -14,6 +14,6 @@ export default function Login({onLogin,onChangeGym}){
       <button className="login-btn" disabled={loading}>{loading?'INGRESANDO...':'INICIAR SESIÓN'}</button>
     </form>
     <small>Ingresá tus credenciales</small>
-    <button type="button" style={{display:'block',margin:'12px auto 0',background:'none',border:0,color:'var(--accent)',fontSize:11,cursor:'pointer',textDecoration:'underline'}} onClick={()=>{ localStorage.removeItem('atlos-gym-hwid'); if(onChangeGym) onChangeGym(); }}>🔁 Cambiar código del gimnasio</button>
+    <button type="button" className="btn-link" onClick={()=>{ localStorage.removeItem('atlos-gym-hwid'); if(onChangeGym) onChangeGym(); }}>🔁 Cambiar código del gimnasio</button>
   </div></div>
 }

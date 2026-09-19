@@ -104,8 +104,8 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         <button className="primary" onClick={onNew}>+ NUEVA CLASE</button>
         <button className="ghost" onClick={handleEdit}>EDITAR</button>
-        <button className="ghost" onClick={handleDelete} style={{color:'var(--danger)',borderColor:'var(--danger)'}}>ELIMINAR</button>
-        <button className="primary" onClick={handleInscribir} style={{background:'var(--accent-sky)'}}>INSCRIBIR</button>
+        <button className="ghost danger" onClick={handleDelete}>ELIMINAR</button>
+        <button className="primary sky" onClick={handleInscribir}>INSCRIBIR</button>
       </div>
     </div>
     <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:12}}><div className="stat blue"><div className="stat-icon" aria-hidden="true">🗓</div><span>CLASES</span><strong>{clases.length}</strong></div><div className="stat orange"><div className="stat-icon" aria-hidden="true">👥</div><span>INSCRIPCIONES</span><strong>{totalIns}</strong></div></div>

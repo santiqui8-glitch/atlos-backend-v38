@@ -176,7 +176,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
             <button className='ghost' onClick={()=>addDay(key)} style={{marginTop:4}}>+ Agregar día</button>
             <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center',borderTop:'1px solid var(--card-border)',paddingTop:8}}>
               <span style={{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}}>Duplicar en...</span>
-              <select id={'dup-week-'+key} defaultValue='' style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'4px',fontSize:11}}>
+              <select id={'dup-week-'+key} defaultValue='' className="field" style={{flex:1}}>
                 <option value=''>Semana...</option>
                 <option value='1'>Semana 1</option>
                 <option value='2'>Semana 2</option>

@@ -67,7 +67,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
       <h3 style={{margin:0,fontSize:14}}>Gestión</h3>
       <div style={{display:'flex',gap:8}}>
         <button className="primary" onClick={onNew}>+ REGISTRAR PAGO</button>
-        {rol!=='Empleado'&&<><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost" onClick={handleDelete} style={{color:'var(--danger)',borderColor:'var(--danger)'}}>ELIMINAR</button></>}
+        {rol!=='Empleado'&&<><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost danger" onClick={handleDelete}>ELIMINAR</button></>}
       </div>
     </div>
     <div className="cards" style={{marginTop:14,gridTemplateColumns:rol==='Empleado'?'1fr 1fr':'repeat(3,1fr)'}}>

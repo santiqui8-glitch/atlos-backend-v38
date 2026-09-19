@@ -52,7 +52,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     setEdit(null); refresh()
   }
   return <section className="panel">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><h3 style={{margin:0,fontSize:14}}>Profesores</h3><div style={{display:'flex',gap:8}}><button className="primary" onClick={onNew}>+ NUEVO PROFESOR</button><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost" onClick={handleDelete} style={{color:'var(--danger)',borderColor:'var(--danger)'}}>ELIMINAR</button></div></div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><h3 style={{margin:0,fontSize:14}}>Profesores</h3><div style={{display:'flex',gap:8}}><button className="primary" onClick={onNew}>+ NUEVO PROFESOR</button><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost danger" onClick={handleDelete}>ELIMINAR</button></div></div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
       <div className="thead" style={{display:'grid',gridTemplateColumns:'60px 1.4fr 1fr 140px 1.2fr',gap:0,background:'var(--table-head)',padding:'10px 8px'}}><span>ID</span><span>Nombre</span><span>Apellido</span><span>Teléfono</span><span>Especialidad</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>

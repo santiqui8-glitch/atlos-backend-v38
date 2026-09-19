@@ -324,7 +324,7 @@ export default function App(){
                 <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600, color:n.color}}>{n.text}</div><div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>ATLOS trabaja para vos</div></div>
               </div>
             )) : <div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Sin notificaciones — todo al día ✓</div>}
-            <div style={{padding:'8px 12px',textAlign:'center'}}><button className="ghost" style={{width:'100%',fontSize:11}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>
+            <div style={{padding:'8px 12px',textAlign:'center'}}><button className="ghost" style={{width:'100%'}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>
           </div>}
         </div>
         <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
