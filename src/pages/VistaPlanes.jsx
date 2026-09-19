@@ -37,7 +37,7 @@ export default function VistaPlanes({students,routines,ejercicios}){
     </div>
     {tab==='alumnos'?<>
       <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,gap:8}}><span style={{fontSize:13,fontWeight:800}}>Alumnos</span><span style={{fontSize:11,color:'var(--muted)'}}>{students.length} alumnos cargados</span></div>
-      <div style={{display:'grid',gridTemplateColumns:'3fr 1fr 1fr 1fr 1.8fr',gap:0,background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:'10px 10px 0 0',padding:'10px 8px',fontSize:11,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--muted)',fontWeight:700}}><span style={{paddingLeft:50}}>ALUMNO</span><span style={{textAlign:'center'}}>EDAD</span><span style={{textAlign:'center'}}>ENFOQUE</span><span style={{textAlign:'center'}}>DISPONIBILIDAD</span><span></span></div>
+      <div className="grid-planes-head"><span style={{paddingLeft:50}}>ALUMNO</span><span style={{textAlign:'center'}}>EDAD</span><span style={{textAlign:'center'}}>ENFOQUE</span><span style={{textAlign:'center'}}>DISPONIBILIDAD</span><span></span></div>
       <div style={{display:'grid',gap:6,marginTop:6, maxHeight:420, overflow:'auto'}}>
         {!students.length&&<div style={{textAlign:'center',padding:20,color:'var(--muted)',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:10}}>Sin alumnos. Carga uno para crear rutina.</div>}
         {students.filter(s=> !qPlanes || s.name.toLowerCase().includes(qPlanes.toLowerCase()) || String(s.dni||'').includes(qPlanes) ).map(s=>{
@@ -45,7 +45,7 @@ export default function VistaPlanes({students,routines,ejercicios}){
           const goal=(s.enfoque||s.goal||'hipertrofia').toLowerCase(); const label=LABELS[goal]||s.enfoque||s.goal||'Hipertrofia'
           const days=s.days_per_week||s.disponibilidad||3; const dispTxt=String(days).match(/^\d+$/)?`${days} días/sem.`:String(days)
           const hasRutina=routines.some(r=>String(r.studentId||r.alumno_id)===String(s.id))
-          return <div key={s.id} style={{display:'grid',gridTemplateColumns:'3fr 1fr 1fr 1fr 1.8fr',gap:0,alignItems:'center',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:10,padding:'10px 8px'}}>
+          return <div key={s.id} className="grid-planes-row">
             <span style={{display:'flex',alignItems:'center',gap:10,overflow:'hidden'}}><span style={{width:32,height:32,borderRadius:8,background:'var(--text)',color:'var(--accent)',display:'grid',placeItems:'center',fontWeight:800,fontSize:11,flexShrink:0}}>{getInitials(s.name)}</span><b style={{fontSize:13,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'pointer'}} onClick={()=>setShowCargar(s)}>{s.name.length>26? s.name.slice(0,26)+'…': s.name}</b></span>
             <span style={{textAlign:'center',fontSize:12}}>{edadTxt}</span>
             <span style={{display:'flex',justifyContent:'center'}}><span style={{background: 'var(--accent)',color:'var(--text)',padding:'4px 10px',borderRadius:999,fontSize:11,fontWeight:800}}>{label}</span></span>

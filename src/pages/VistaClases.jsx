@@ -110,12 +110,12 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     </div>
     <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:12}}><div className="stat blue"><div className="stat-icon" aria-hidden="true">🗓</div><span>CLASES</span><strong>{clases.length}</strong></div><div className="stat orange"><div className="stat-icon" aria-hidden="true">👥</div><span>INSCRIPCIONES</span><strong>{totalIns}</strong></div></div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
-      <div className="thead" style={{display:'grid',gridTemplateColumns:'50px 1.6fr 70px 85px 85px 65px 1.2fr 70px',gap:0,background:'var(--table-head)',padding:'10px 8px'}}><span>ID</span><span>Clase</span><span>Día</span><span>Inicio</span><span>Fin</span><span>Cap.</span><span>Profesor</span><span>Insc.</span></div>
+      <div className="thead clases"><span>ID</span><span>Clase</span><span>Día</span><span>Inicio</span><span>Fin</span><span>Cap.</span><span>Profesor</span><span>Insc.</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>
         {clases.map(c=>{
           const isSel=String(sel)===String(c.id)
-          return <div key={c.id} onClick={()=>setSel(c.id)} onDoubleClick={handleEdit} style={{display:'grid',gridTemplateColumns:'50px 1.6fr 70px 85px 85px 65px 1.2fr 70px',gap:0,background:isSel?'var(--selected)':'transparent',cursor:'pointer',borderLeft:isSel?'3px solid var(--accent)':'3px solid transparent',padding:'10px 8px',borderBottom:'1px solid var(--card-border)'}}>
-            <span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{String(c.id).slice(0,6)}</span><span><b>{c.nombre||c.name}</b></span><span>{c.dia_mes||c.dia||'-'}</span><span>{c.hora_inicio||c.inicio||'-'}</span><span>{c.hora_fin||c.fin||'-'}</span><span>{c.capacidad||c.cap||'-'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.profesor||'—'}</span><span style={{fontWeight:700,textAlign:'center'}}>{c.inscriptos||c.inscriptos_count||0}</span>
+          return <div key={c.id} onClick={()=>setSel(c.id)} onDoubleClick={handleEdit} className={isSel?'trow sel clases':'trow clases'}>
+            <span style={{fontFamily:'monospace'}} className="muted-text">{String(c.id).slice(0,6)}</span><span><b>{c.nombre||c.name}</b></span><span>{c.dia_mes||c.dia||'-'}</span><span>{c.hora_inicio||c.inicio||'-'}</span><span>{c.hora_fin||c.fin||'-'}</span><span>{c.capacidad||c.cap||'-'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.profesor||'—'}</span><span style={{fontWeight:700,textAlign:'center'}}>{c.inscriptos||c.inscriptos_count||0}</span>
           </div>
         })}
         {!clases.length&&<Empty text="No hay clases. Creá la primera con + NUEVA CLASE."/>}

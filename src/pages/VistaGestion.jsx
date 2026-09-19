@@ -76,13 +76,13 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
       <div className="stat blue"><div className="stat-icon" aria-hidden="true">✓</div><span>ALUMNOS AL DÍA</span><strong>{stats.alumnosAlDia}</strong></div>
     </div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
-      <div className="thead" style={{display:'grid',gridTemplateColumns:'60px 120px 1.5fr 1.2fr 110px 120px',background:'var(--table-head)',padding:'10px 8px',margin:0}}><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>
+      <div className="thead gestion"><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>
       <div style={{maxHeight:420,overflow:'auto'}}>
         {payments.slice().reverse().map(p=>{
           const s=students.find(x=>String(x.id)===String(p.studentId))
           const isSel=String(sel)===String(p.id)
-          return <div key={p.id} onClick={()=>setSel(p.id)} className="trow" style={{display:'grid',gridTemplateColumns:'60px 120px 1.5fr 1.2fr 110px 120px',background:isSel?'var(--selected)':'transparent',cursor:'pointer',borderLeft:isSel?'3px solid var(--accent)':'3px solid transparent',padding:'10px 8px',margin:0}}>
-            <span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{String(p.id).slice(0,6)}</span><span style={{fontSize:12}}>{toDisplay(p.date)}</span><span><b>{p.alumnoNombre||s?.name||'—'}</b></span><span>{p.note||'Cuota Mensual'}</span><span style={{fontWeight:700}}>{money(p.amount)}</span><span>{p.metodo||'Efectivo'}</span>
+          return <div key={p.id} onClick={()=>setSel(p.id)} className={isSel?'trow sel gestion':'trow gestion'}>
+            <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span style={{fontSize:12}}>{toDisplay(p.date)}</span><span><b>{p.alumnoNombre||s?.name||'—'}</b></span><span>{p.note||'Cuota Mensual'}</span><span className="num" style={{fontWeight:700}}>{money(p.amount)}</span><span>{p.metodo||'Efectivo'}</span>
           </div>
         })}
         {!payments.length&&<Empty text="No hay pagos. Registrá el primero."/>}

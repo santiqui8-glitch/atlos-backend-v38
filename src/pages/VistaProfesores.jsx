@@ -54,12 +54,12 @@ export default function VistaProfesores({profesores,onNew,refresh}){
   return <section className="panel">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><h3 style={{margin:0,fontSize:14}}>Profesores</h3><div style={{display:'flex',gap:8}}><button className="primary" onClick={onNew}>+ NUEVO PROFESOR</button><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost danger" onClick={handleDelete}>ELIMINAR</button></div></div>
     <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
-      <div className="thead" style={{display:'grid',gridTemplateColumns:'60px 1.4fr 1fr 140px 1.2fr',gap:0,background:'var(--table-head)',padding:'10px 8px'}}><span>ID</span><span>Nombre</span><span>Apellido</span><span>Teléfono</span><span>Especialidad</span></div>
+      <div className="thead profesores"><span>ID</span><span>Nombre</span><span>Apellido</span><span>Teléfono</span><span>Especialidad</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>
         {profesores.map(p=>{
           const isSel=String(sel)===String(p.id)
-          return <div key={p.id} onClick={()=>setSel(p.id)} onDoubleClick={handleEdit} style={{display:'grid',gridTemplateColumns:'60px 1.4fr 1fr 140px 1.2fr',gap:0,background:isSel?'var(--selected)':'transparent',cursor:'pointer',borderLeft:isSel?'3px solid var(--accent)':'3px solid transparent',padding:'10px 8px',borderBottom:'1px solid var(--card-border)'}}>
-            <span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{String(p.id).slice(0,6)}</span><span><b>{p.nombre}</b></span><span>{p.apellido}</span><span>{p.telefono||'—'}</span><span><span style={{background:'rgba(99,102,241,.12)',color:'var(--info)',padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>{p.especialidad}</span></span>
+          return <div key={p.id} onClick={()=>setSel(p.id)} onDoubleClick={handleEdit} className={isSel?'trow sel profesores':'trow profesores'}>
+            <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span><b>{p.nombre}</b></span><span>{p.apellido}</span><span>{p.telefono||'—'}</span><span><span style={{background:'rgba(99,102,241,.12)',color:'var(--info)',padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>{p.especialidad}</span></span>
           </div>
         })}
         {!profesores.length&&<Empty text="No hay profesores. Creá el primero con + NUEVO PROFESOR."/>}
