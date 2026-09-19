@@ -286,19 +286,19 @@ export default function App(){
       const lastPago=pagosAlum.slice().sort((a,b)=> (parseFecha(b.date)||new Date(0)) - (parseFecha(a.date)||new Date(0)))[0]
       let venc=null; if(lastPago){ const pd=parseFecha(lastPago.date); if(pd){ venc=new Date(pd); venc.setDate(venc.getDate()+30) } }
       const diffVenc=venc? Math.ceil((venc - hoy)/86400000) : null
-      if(venc && diffVenc!==null && diffVenc>=0 && diffVenc<=3) arr.push({id:`vence-${s.id}`, icon:'⚠️', text:`Cuota vence en ${diffVenc} días — ${s.name}`, color:'#F59E0B'})
-      if(venc && diffVenc!==null && diffVenc<0) arr.push({id:`vencida-${s.id}`, icon:'🔴', text:`Cuota vencida — ${s.name}`, color:'#EF4444'})
-      if(!venc && !pagosAlum.length) arr.push({id:`pend-${s.id}`, icon:'💰', text:`Pago pendiente — ${s.name} no tiene pagos`, color:'#F59E0B'})
+      if(venc && diffVenc!==null && diffVenc>=0 && diffVenc<=3) arr.push({id:`vence-${s.id}`, icon:'⚠️', text:`Cuota vence en ${diffVenc} días — ${s.name}`, color:'var(--warning)'})
+      if(venc && diffVenc!==null && diffVenc<0) arr.push({id:`vencida-${s.id}`, icon:'🔴', text:`Cuota vencida — ${s.name}`, color:'var(--danger)'})
+      if(!venc && !pagosAlum.length) arr.push({id:`pend-${s.id}`, icon:'💰', text:`Pago pendiente — ${s.name} no tiene pagos`, color:'var(--warning)'})
       // asistencias
       const asistAlum=attendance.filter(a=>String(a.studentId)===String(s.id))
       const lastAsist=asistAlum.slice().sort((a,b)=> (parseFecha(b.date)||new Date(0)) - (parseFecha(a.date)||new Date(0)))[0]
       const lastDate=lastAsist? parseFecha(lastAsist.date) : parseFecha(s.joinedAt)
-      if(lastDate){ const diffAsist=Math.floor((hoy - lastDate)/86400000); if(diffAsist>=12) arr.push({id:`no12-${s.id}`, icon:'🔴', text:`${s.name} no asiste hace ${diffAsist} días`, color:'#EF4444'}); else if(diffAsist>=7) arr.push({id:`no7-${s.id}`, icon:'🟡', text:`${s.name} no vino hace ${diffAsist} días`, color:'#EAB308'}); else if(diffAsist>=5) arr.push({id:`perd-${s.id}`, icon:'🟠', text:`${s.name} perdió asistencia`, color:'#F97316'}) }
+      if(lastDate){ const diffAsist=Math.floor((hoy - lastDate)/86400000); if(diffAsist>=12) arr.push({id:`no12-${s.id}`, icon:'🔴', text:`${s.name} no asiste hace ${diffAsist} días`, color:'var(--danger)'}); else if(diffAsist>=7) arr.push({id:`no7-${s.id}`, icon:'🟡', text:`${s.name} no vino hace ${diffAsist} días`, color:'var(--accent-yellow)'}); else if(diffAsist>=5) arr.push({id:`perd-${s.id}`, icon:'🟠', text:`${s.name} perdió asistencia`, color:'var(--brand-secondary)'}) }
       // nuevo alumno 7 días
-      const ing=parseFecha(s.joinedAt); if(ing){ const dIng=Math.floor((hoy - ing)/86400000); if(dIng>=0 && dIng<=7) arr.push({id:`nuevo-${s.id}`, icon:'🟢', text:`Nuevo alumno — ${s.name}`, color:'#22C55E'}) }
+      const ing=parseFecha(s.joinedAt); if(ing){ const dIng=Math.floor((hoy - ing)/86400000); if(dIng>=0 && dIng<=7) arr.push({id:`nuevo-${s.id}`, icon:'🟢', text:`Nuevo alumno — ${s.name}`, color:'var(--success)'}) }
       // cumpleaños: usa fecha_nacimiento real
       if(s.fecha_nacimiento){
-        const f=parseFecha(s.fecha_nacimiento); if(f && f.getDate()===hoy.getDate() && f.getMonth()===hoy.getMonth()) arr.push({id:`cumple-${s.id}`, icon:'🎂', text:`Hoy cumple años ${s.name}`, color:'#EC4899'})
+        const f=parseFecha(s.fecha_nacimiento); if(f && f.getDate()===hoy.getDate() && f.getMonth()===hoy.getMonth()) arr.push({id:`cumple-${s.id}`, icon:'🎂', text:`Hoy cumple años ${s.name}`, color:'var(--accent-pink)'})
       }
     }
     // dedup por id
@@ -315,13 +315,13 @@ export default function App(){
     <main className="main">
       <header><div><h1>{nav.find(x=>x[0]===page)?.[2]||page}</h1><p>{usuario} · {rol} · {fmtHoy()} · {online?'☁ Sincronización':'◉ Local'}</p></div><div className="header-actions">
         <div style={{position:'relative'}}>
-          <button onClick={()=>setShowNotifs(v=>!v)} title="Notificaciones" style={{position:'relative',width:40,height:40,borderRadius:10,border:'1px solid var(--card-border)',background:'var(--card)',cursor:'pointer',fontSize:18}}>🔔{notifs.length>0&&<span style={{position:'absolute',top:-6,right:-6,background:'#EF4444',color:'#fff',fontSize:10,fontWeight:800,padding:'2px 6px',borderRadius:999, minWidth:18,textAlign:'center'}}>{notifs.length}</span>}</button>
+          <button onClick={()=>setShowNotifs(v=>!v)} title="Notificaciones" style={{position:'relative',width:40,height:40,borderRadius:10,border:'1px solid var(--card-border)',background:'var(--card)',cursor:'pointer',fontSize:18}}>🔔{notifs.length>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--danger)',color:'var(--text)',fontSize:11,fontWeight:800,padding:'2px 6px',borderRadius:999, minWidth:18,textAlign:'center'}}>{notifs.length}</span>}</button>
           {showNotifs&&<div style={{position:'absolute',top:'48px',right:0,width:340,maxHeight:420,overflow:'auto',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,.35)',zIndex:30}}>
             <div style={{padding:'12px 14px',borderBottom:'1px solid var(--card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><b style={{fontSize:13}}>Notificaciones</b><button onClick={()=>setShowNotifs(false)} style={{border:0,background:'transparent',color:'var(--muted)',cursor:'pointer'}}>×</button></div>
             {notifs.length? notifs.map(n=>(
               <div key={n.id} style={{display:'flex',gap:10,padding:'10px 12px',borderBottom:'1px solid var(--card-border)',alignItems:'flex-start'}}>
                 <span style={{fontSize:16}}>{n.icon}</span>
-                <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600, color:n.color}}>{n.text}</div><div style={{fontSize:10,color:'var(--muted)',marginTop:2}}>ATLOS trabaja para vos</div></div>
+                <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600, color:n.color}}>{n.text}</div><div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>ATLOS trabaja para vos</div></div>
               </div>
             )) : <div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Sin notificaciones — todo al día ✓</div>}
             <div style={{padding:'8px 12px',textAlign:'center'}}><button className="ghost" style={{width:'100%',fontSize:11}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>

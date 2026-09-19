@@ -118,7 +118,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
   const sems=[['1',s1,'Semana 1'],['2',s2,'Semana 2'],['3',s3,'Semana 3'],['4',s4,'Semana 4']]
   return <div className='overlay' onMouseDown={e=>{if(e.target===e.currentTarget) onClose()}}><div className='modal' style={{width:'min(1440px,98vw)',maxHeight:'95vh',overflow:'auto',padding:0}}>
     <div style={{background:'var(--card)',padding:'16px 20px',borderBottom:'1px solid var(--card-border)',textAlign:'center'}}>
-      <div style={{fontFamily:'monospace',fontSize:10,letterSpacing:'.14em',color:'var(--muted)',fontWeight:700}}>PLAN MENSUAL</div>
+      <div style={{fontFamily:'monospace',fontSize:11,letterSpacing:'.14em',color:'var(--muted)',fontWeight:700}}>PLAN MENSUAL</div>
       <div style={{fontSize:16,fontWeight:900,marginTop:4}}>{student.name} · {daysNum} días por semana</div>
       <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>La página muestra todos los ejercicios. Los primeros son recomendaciones según el perfil, pero podés elegir cualquiera.</div>
     </div>
@@ -132,7 +132,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:16,padding:16, background:'var(--bg)'}}>
       {sems.map(([key,plan,title])=>(
         <div key={key} style={{background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:10,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-          <div style={{background:'var(--accent)',color:'#fff',textAlign:'center',padding:'8px',fontFamily:'monospace',fontSize:11,fontWeight:800}}>{title}</div>
+          <div style={{background:'var(--accent)',color:'var(--text)',textAlign:'center',padding:'8px',fontFamily:'monospace',fontSize:11,fontWeight:800}}>{title}</div>
           <div style={{flex:1,overflow:'auto',maxHeight:'65vh',minHeight:320,padding:8,display:'grid',gap:8}}>
             {!plan.length&&<div style={{textAlign:'center',padding:20,color:'var(--muted)',fontSize:12}}>Vacía — usa Auto-generar o agrega días</div>}
             {plan.map((day, dIdx)=>(
@@ -149,9 +149,9 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
                       <button className='ghost' onClick={()=>removeEx(key,dIdx,eIdx)} style={{padding:'2px 6px',color:'var(--danger)'}}>×</button>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4,paddingLeft:2}}>
-                      <span style={{fontSize:10,color:'var(--muted)'}}>Peso</span>
+                      <span style={{fontSize:11,color:'var(--muted)'}}>Peso</span>
                       <input value={ex.peso||''} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], exercises: copy[dIdx].exercises.map((ee,i)=> i===eIdx? {...ee, peso:e.target.value}: ee)}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} placeholder="0" inputMode="decimal" style={{width:64,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'3px 6px',textAlign:'center',fontFamily:'monospace',fontSize:11}} />
-                      <span style={{fontSize:10,color:'var(--muted)'}}>kg</span>
+                      <span style={{fontSize:11,color:'var(--muted)'}}>kg</span>
                     </div>
                   </div>
                 ))}
@@ -175,7 +175,7 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
             ))}
             <button className='ghost' onClick={()=>addDay(key)} style={{marginTop:4}}>+ Agregar día</button>
             <div style={{display:'flex',gap:6,marginTop:8,alignItems:'center',borderTop:'1px solid var(--card-border)',paddingTop:8}}>
-              <span style={{fontSize:10,color:'var(--muted)',whiteSpace:'nowrap'}}>Duplicar en...</span>
+              <span style={{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}}>Duplicar en...</span>
               <select id={'dup-week-'+key} defaultValue='' style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'4px',fontSize:11}}>
                 <option value=''>Semana...</option>
                 <option value='1'>Semana 1</option>
