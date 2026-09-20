@@ -12,6 +12,22 @@ function getHWID(){
 export function getGymHWID(){
   return localStorage.getItem('atlos-gym-hwid') || null;
 }
+
+// V44-B: generador central de identidad de operación. Una operación lógica
+// usa UN SOLO operationId en todos sus intentos (online, cola, retry).
+// NUNCA generar otro durante el retry de la misma operación.
+export function newOperationId(){
+  try{ const id=crypto.randomUUID(); if(id) return id }catch{}
+  try{ return 'op-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10) }catch{ return 'op-fallback-'+Date.now() }
+}
+// V44-B: wrapper para mutaciones online con clave estable. Devuelve
+// {operationId, result} para que el llamador pueda reutilizar la MISMA clave
+// si la operación cae a la cola offline. No usar en GET.
+export async function requestMutation(path,{method='POST',body,operationId,...opts}={}){
+  const opId=operationId||newOperationId();
+  const result=await request(path,{method,body,operationId:opId,...opts});
+  return {operationId:opId, result};
+}
 export function setGymHWID(hwid){ if(hwid) localStorage.setItem('atlos-gym-hwid', hwid.trim().toUpperCase()); }
 
 // Diferencia errores de red (sin conexión) de errores del servidor: solo los de red se encolan.
@@ -21,13 +37,16 @@ export function esErrorDeRed(e){
   return /failed to fetch|networkerror|load failed|timed out|aborted|network request/i.test(m)
 }
 
-async function request(path,{method='GET',body,auth=true,timeout=0}={}){
+async function request(path,{method='GET',body,auth=true,timeout=0,operationId=null}={}){
   const headers={'Content-Type':'application/json'};
-  const tok=getToken(); 
+  const tok=getToken();
   if(auth && tok) headers['Authorization']=`Bearer ${tok}`;
-  
-  const hwid=getGymHWID(); 
+
+  const hwid=getGymHWID();
   if(hwid) headers['X-HWID']=hwid; // Enviamos HWID siempre para identificación
+  // V44-B: identidad estable de la operación. Viaja SIEMPRE que el llamador la
+  // aporte (cola offline u online); nunca se genera aquí para no romper retries.
+  if(operationId) headers['Idempotency-Key']=String(operationId);
   
   // V39-08B: timeout solo cuando el llamador lo pide (flush). Sin timeout el
   // comportamiento es idéntico al anterior (requests de UI intactas).
@@ -63,23 +82,25 @@ export const api={
   alumnos:()=>request('/alumnos'),
   alumno:(id)=>request(`/alumnos/${id}`),
   crearAlumno:(data,opts)=>request('/alumnos',{method:'POST',body:data,...(opts||{})}),
-  actualizarAlumno:(id,data)=>request(`/alumnos/${id}`,{method:'PUT',body:data}),
-  eliminarAlumno:(id)=>request(`/alumnos/${id}`,{method:'DELETE'}),
+  actualizarAlumno:(id,data,opts)=>request(`/alumnos/${id}`,{method:'PUT',body:data,...(opts||{})}),
+  eliminarAlumno:(id,opts)=>request(`/alumnos/${id}`,{method:'DELETE',...(opts||{})}),
   ejercicios:(params)=>request('/ejercicios'+(params?`?${new URLSearchParams(params)}`:'')),
-  crearEjercicio:(data)=>request('/ejercicios',{method:'POST',body:data}),
-  crearEjerciciosLote:(arr)=>request('/ejercicios/lote',{method:'POST',body:arr}),
-  eliminarEjercicio:(id)=>request(`/ejercicios/${id}`,{method:'DELETE'}),
+  crearEjercicio:(data,opts)=>request('/ejercicios',{method:'POST',body:data,...(opts||{})}),
+  crearEjerciciosLote:(arr,opts)=>request('/ejercicios/lote',{method:'POST',body:arr,...(opts||{})}),
+  eliminarEjercicio:(id,opts)=>request(`/ejercicios/${id}`,{method:'DELETE',...(opts||{})}),
   pagos:(params)=>request('/pagos'+(params?`?${new URLSearchParams(params)}`:'')),
   crearPago:(data,opts)=>request('/pagos',{method:'POST',body:data,...(opts||{})}),
+  // V44-B: edición in-place de pago (idempotente vía operationId → Idempotency-Key).
+  actualizarPago:(id,data,opts)=>request(`/pagos/${id}`,{method:'PUT',body:data,...(opts||{})}),
   asistencia:(params)=>request('/asistencia'+(params?`?${new URLSearchParams(params)}`:'')),
   checkin:(alumno_id,opts)=>request('/asistencia/checkin',{method:'POST',body:{alumno_id},...(opts||{})}),
-  checkout:(alumno_id)=>request('/asistencia/checkout',{method:'POST',body:{alumno_id}}),
+  checkout:(alumno_id,opts)=>request('/asistencia/checkout',{method:'POST',body:{alumno_id},...(opts||{})}),
   clases:()=>request('/clases'),
   crearClase:(data,opts)=>request('/clases',{method:'POST',body:data,...(opts||{})}),
   actualizarClase:(id,data,opts)=>request(`/clases/${id}`,{method:'PUT',body:data,...(opts||{})}),
   eliminarClase:(id,opts)=>request(`/clases/${id}`,{method:'DELETE',...(opts||{})}),
   claseAlumnos:(id)=>request(`/clases/${id}/alumnos`),
-  inscribirClase:(clase_id,alumno_id)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id}}),
+  inscribirClase:(clase_id,alumno_id,opts)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id},...(opts||{})}),
   cuotas:(params)=>request('/cuotas'+(params?`?${new URLSearchParams(params)}`:'')),
   dashboard:()=>request('/dashboard'),
   exercisesLibrary:()=>request('/exercises-library'),
@@ -88,7 +109,7 @@ export const api={
   routines:(params)=>request('/routines'+(params?`?${new URLSearchParams(params)}`:'')),
   routineLatest:(sid)=>request(`/routines/${sid}/latest`),
   crearRoutine:(data,opts)=>request('/routines',{method:'POST',body:data,...(opts||{})}),
-  borrarRoutine:(id)=>request(`/routines/${id}`,{method:'DELETE'}),
+  borrarRoutine:(id,opts)=>request(`/routines/${id}`,{method:'DELETE',...(opts||{})}),
   
   // Profesores: CRUD REST de ATLOS.
   profesores:()=>request('/profesores'),
@@ -101,16 +122,16 @@ export const api={
   checkLicencia:(hwid)=>request(`/licencias/check?hwid=${encodeURIComponent(hwid||getGymHWID())}`),
   renovarLicencia:(hwid,meses=1,gym_name,clave,extra={})=>request('/licencias/renovar',{method:'POST',body:{hwid:hwid||getGymHWID(), meses, gym_name, ...(clave?{clave}:{}), ...extra}}),
   listarLicencias:()=>request('/licencias'),
-  eliminarLicencia:(hwid)=>request(`/licencias/${encodeURIComponent(hwid)}`,{method:'DELETE'}),
-  bloquearLicencia:(hwid)=>request(`/licencias/${encodeURIComponent(hwid)}/bloquear`,{method:'POST'}),
-  desbloquearLicencia:(hwid)=>request(`/licencias/${encodeURIComponent(hwid)}/desbloquear`,{method:'POST'}),
+  eliminarLicencia:(hwid,opts)=>request(`/licencias/${encodeURIComponent(hwid)}`,{method:'DELETE',...(opts||{})}),
+  bloquearLicencia:(hwid,opts)=>request(`/licencias/${encodeURIComponent(hwid)}/bloquear`,{method:'POST',...(opts||{})}),
+  desbloquearLicencia:(hwid,opts)=>request(`/licencias/${encodeURIComponent(hwid)}/desbloquear`,{method:'POST',...(opts||{})}),
   getGymConfig:()=>request('/gym/config'),
-  updateGymConfig:(changes)=>request('/gym/config',{method:'PUT',body:changes}),
+  updateGymConfig:(changes,opts)=>request('/gym/config',{method:'PUT',body:changes,...(opts||{})}),
   
   // Personal no existe en API cloud -> mock local
   usuarios:()=>request('/usuarios').catch(()=> Promise.resolve(JSON.parse(localStorage.getItem('atlos-usuarios')||'[{"id":1,"usuario":"admin","rol":"Dueño"}]'))),
-  crearUsuario:(data)=>request('/usuarios',{method:'POST',body:data}).catch(()=>{ const arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); const n={id:Date.now(),...data}; arr.push(n); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return n; }),
-  eliminarUsuario:(id)=>request(`/usuarios/${id}`,{method:'DELETE'}).catch(()=>{ let arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); arr=arr.filter(u=>String(u.id)!==String(id)); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return {ok:true}; }),
+  crearUsuario:(data,opts)=>request('/usuarios',{method:'POST',body:data,...(opts||{})}).catch(()=>{ const arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); const n={id:Date.now(),...data}; arr.push(n); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return n; }),
+  eliminarUsuario:(id,opts)=>request(`/usuarios/${id}`,{method:'DELETE',...(opts||{})}).catch(()=>{ let arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); arr=arr.filter(u=>String(u.id)!==String(id)); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return {ok:true}; }),
 };
 
 export function setToken(t){ if(t) localStorage.setItem('atlos-token',t); else localStorage.removeItem('atlos-token'); }
@@ -205,7 +226,8 @@ function remapPendingAlumno(items, lid, sid){
 async function flushAlumnoCrear(item){
   const _pl=(item&&item.payload)||{};
   const { _localId, ...body }=_pl;
-  const r=await api.crearAlumno(body,FLUSH_OPTS);
+  // V44-B: la misma operationId del item viaja como Idempotency-Key (retry seguro).
+  const r=await api.crearAlumno(body,{...FLUSH_OPTS, operationId:item&&item.operationId});
   const lid=_localId?String(_localId):null;
   const sid=(r&&(r.id??r._id))||null;
   // V39-09B-1: 2xx sin ID de servidor → el item NO sale de cola (reconcile pendiente).
@@ -235,7 +257,7 @@ async function flushProfesorCrear(item){
   const arr=tenantGetJSON('profesores',[])
   const rec=arr.find(x=>String(x.id)===lid)
   if(!rec) throw new Error('profesor local no encontrado para sincronizar')
-  const r=await api.crearProfesor({nombre:rec.nombre, apellido:rec.apellido, telefono:rec.telefono||'', especialidad:rec.especialidad||'General'},FLUSH_OPTS)
+  const r=await api.crearProfesor({nombre:rec.nombre, apellido:rec.apellido, telefono:rec.telefono||'', especialidad:rec.especialidad||'General'},{...FLUSH_OPTS, operationId:item&&item.operationId})
   const sid=(r&&(r.id??r._id))||null
   // V39-09B-1: 2xx sin ID de servidor → reconcile pendiente; el registro local
   // no se marca sincronizado y el item NO sale de cola.
@@ -254,7 +276,7 @@ async function flushProfesorCrear(item){
 async function flushRoutine(item){
   const _pl=(item&&item.payload)||{};
   const { _localId, ...body }=_pl
-  const r=await api.crearRoutine(body,FLUSH_OPTS)
+  const r=await api.crearRoutine(body,{...FLUSH_OPTS, operationId:item&&item.operationId})
   const lid=_localId?String(_localId):null
   const sid=(r&&(r.id??r._id??r.routine_id))||null
   // V39-09B-1: 2xx sin ID de servidor → reconcile pendiente. Las filas locales
@@ -277,7 +299,7 @@ async function flushRoutine(item){
 async function flushClaseCrear(item){
   const _pl=(item&&item.payload)||{};
   const { _localId, ...body }=_pl
-  const r=await api.crearClase(body,FLUSH_OPTS)
+  const r=await api.crearClase(body,{...FLUSH_OPTS, operationId:item&&item.operationId})
   const lid=_localId?String(_localId):null
   const sid=(r&&(r.id??r._id))||null
   // V39-09B-1: 2xx sin ID de servidor → reconcile pendiente; el registro local NO
@@ -492,16 +514,16 @@ export async function flushQueue(){
         else if(_r&&_r.code){ markReconcilePending(item, _r.code==='no-server-id'?'alumno: 2xx sin ID de servidor':'alumno: reconciliación local incompleta'); remain.push(item); }
         else remain.push(item);
       }
-      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody,FLUSH_OPTS); }
-      else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id,FLUSH_OPTS); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
+      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id,{...FLUSH_OPTS, operationId:item&&item.operationId}); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
       else if(item.type==='clase'){
         const _r=await flushClaseCrear(item);
         if(_r&&_r.ok){/* reconciliación completa (clases/inscripciones ya migradas) */}
         else if(_r&&_r.code){ markReconcilePending(item, _r.code==='no-server-id'?'clase: 2xx sin ID de servidor':'clase: reconciliación local incompleta'); remain.push(item); }
         else remain.push(item);
       }
-      else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id,FLUSH_OPTS);
-      else if(item.type==='updateClase') await api.actualizarClase(item.payload.id,{nombre:item.payload.nombre,dia_mes:item.payload.dia_mes,hora_inicio:item.payload.hora_inicio,hora_fin:item.payload.hora_fin,capacidad:item.payload.capacidad,profesor:item.payload.profesor},FLUSH_OPTS);
+      else if(item.type==='deleteClase') await api.eliminarClase(item.payload.id,{...FLUSH_OPTS, operationId:item&&item.operationId});
+      else if(item.type==='updateClase') await api.actualizarClase(item.payload.id,{nombre:item.payload.nombre,dia_mes:item.payload.dia_mes,hora_inicio:item.payload.hora_inicio,hora_fin:item.payload.hora_fin,capacidad:item.payload.capacidad,profesor:item.payload.profesor},{...FLUSH_OPTS, operationId:item&&item.operationId});
       else if(item.type==='routine'){
         const _r=await flushRoutine(item);
         if(_r&&_r.ok){/* reconciliación completa (filas ya remapeadas) */}
@@ -514,8 +536,8 @@ export async function flushQueue(){
         else if(_r&&_r.code){ markReconcilePending(item, _r.code==='no-server-id'?'profesor: 2xx sin ID de servidor':'profesor: reconciliación local incompleta'); remain.push(item); }
         else remain.push(item);
       }
-      else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad},FLUSH_OPTS);
-      else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id,FLUSH_OPTS);
+      else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad},{...FLUSH_OPTS, operationId:item&&item.operationId});
+      else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id,{...FLUSH_OPTS, operationId:item&&item.operationId});
       else remain.push(item);
     }catch(e){
       const _pl=item.payload||{};

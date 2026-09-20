@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { remove } from '../services/db'
 import { onEnterNext } from '../utils/helpers.js'
@@ -16,8 +16,9 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     const targetId=selected.serverId||null
     if(targetId){
       // ENDPOINT ESPERADO: DELETE /profesores/{id}. Primero la API; solo si falla la red se encola.
-      try{ await api.borrarProfesor(targetId) }
-      catch(e){ console.warn('borrar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteProfesor',{id:targetId}) }
+      const opId=newOperationId();
+      try{ await api.borrarProfesor(targetId,{operationId:opId}) }
+      catch(e){ console.warn('borrar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteProfesor',{id:targetId},{operationId:opId}) }
     } else if(selected.pending){
       // profesor creado offline sin confirmar: cancelar su alta encolada
       const q=readTenantQueue()
@@ -46,8 +47,9 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     if(idx>=0){ arr[idx]=updated; tenantSetJSON('profesores',arr) }
     if(updated.serverId){
       // ENDPOINT ESPERADO: PUT /profesores/{id}. Primero la API; solo si falla la red se encola.
-      try{ await api.actualizarProfesor(updated.serverId, {nombre, apellido, telefono, especialidad}) }
-      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}); else if(prevRec){ try{ const _a=tenantGetJSON('profesores',[]); const _i=_a.findIndex(x=>String(x.id)===String(edit.id)); if(_i>=0){ _a[_i]=prevRec; tenantSetJSON('profesores',_a) } }catch{} } }
+      const opId=newOperationId();
+      try{ await api.actualizarProfesor(updated.serverId, {nombre, apellido, telefono, especialidad}, {operationId:opId}) }
+      catch(e){ console.warn('actualizar profesor api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('updateProfesor', {id:updated.serverId, nombre, apellido, telefono, especialidad}, {operationId:opId}); else if(prevRec){ try{ const _a=tenantGetJSON('profesores',[]); const _i=_a.findIndex(x=>String(x.id)===String(edit.id)); if(_i>=0){ _a[_i]=prevRec; tenantSetJSON('profesores',_a) } }catch{} } }
     }
     setEdit(null); refresh()
   }

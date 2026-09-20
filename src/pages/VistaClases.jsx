@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { remove } from '../services/db'
 import { today, onEnterNext } from '../utils/helpers.js'
@@ -21,8 +21,9 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     const targetId=selected.serverId || (isLocal? null : selected.id)
     if(targetId){
       // ENDPOINT ESPERADO: DELETE /clases/{id} (backend en desarrollo). Primero la API; solo si falla la red se encola.
-      try{ await api.eliminarClase(targetId) }
-      catch(e){ console.warn('eliminar clase api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteClase',{id:targetId}) }
+      const opId=newOperationId();
+      try{ await api.eliminarClase(targetId,{operationId:opId}) }
+      catch(e){ console.warn('eliminar clase api fallo → encolado', e.message); if(esErrorDeRed(e)) queuePush('deleteClase',{id:targetId},{operationId:opId}) }
     } else if(selected.pending){
       // clase creada offline todavía sin id de servidor: cancelar su alta encolada
       const q=readTenantQueue()
@@ -51,8 +52,9 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     let updateRejected=false
     if(targetId){
       // ENDPOINT ESPERADO: PUT /clases/{id}. Antes se hacía crearClase() y duplicaba la clase en la nube.
-      try{ await api.actualizarClase(targetId, data) }
-      catch(err){ console.warn('editar clase api',err.message); if(esErrorDeRed(err)) queuePush('updateClase',{id:targetId, ...data}); else updateRejected=true }
+      const opId=newOperationId();
+      try{ await api.actualizarClase(targetId, data, {operationId:opId}) }
+      catch(err){ console.warn('editar clase api',err.message); if(esErrorDeRed(err)) queuePush('updateClase',{id:targetId, ...data},{operationId:opId}); else updateRejected=true }
     } else if(edit.pending){
       // clase creada offline sin confirmar: pisar el payload encolado con los datos editados
       const q=readTenantQueue()
@@ -76,7 +78,7 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     e.preventDefault(); if(savingInscribir) return; savingInscribir=true; try{
     const f=new FormData(e.currentTarget); const alumnoId=f.get('alumno')
     const _aSid=String(alumnoId??'').trim(); const _alumnoRef=/^\d+$/.test(_aSid)?Number(_aSid):_aSid
-    try{ await api.inscribirClase(selected.id, _alumnoRef) }catch(err){ console.warn('inscribir api',err.message);
+    try{ await api.inscribirClase(selected.id, _alumnoRef, {operationId:newOperationId()}) }catch(err){ console.warn('inscribir api',err.message);
       // BLOQUE 4P: fallback local solo si no es un rechazo definitivo 4xx (usa err.status de 4B).
       const _st=err&&typeof err.status==='number'?err.status:null;
       const _okFallback=esErrorDeRed(err)||_st==null||_st>=500||_st===429;

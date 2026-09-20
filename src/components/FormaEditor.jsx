@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { tenantGetJSON, tenantSetJSON } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 
@@ -96,11 +96,13 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
     const localRoutineId=crypto.randomUUID()
     let serverId=null
     let pendiente=!navigator.onLine
+    // V44-B: una sola operationId para el intento online y el fallback encolado.
+    const opId=newOperationId();
     if(navigator.onLine){
-      try{ const r=await api.crearRoutine(payload); serverId=(r&&(r.id??r._id??r.routine_id))||null }
-      catch(e){ console.warn('crearRoutine api fallo', e.message); pendiente=true; if(esErrorDeRed(e)){ queuePush('routine',{...payload,_localId:localRoutineId}) } }
+      try{ const r=await api.crearRoutine(payload,{operationId:opId}); serverId=(r&&(r.id??r._id??r.routine_id))||null }
+      catch(e){ console.warn('crearRoutine api fallo', e.message); pendiente=true; if(esErrorDeRed(e)){ queuePush('routine',{...payload,_localId:localRoutineId},{operationId:opId}) } }
     } else {
-      queuePush('routine',{...payload,_localId:localRoutineId})
+      queuePush('routine',{...payload,_localId:localRoutineId},{operationId:opId})
     }
     // Limpiar representaciones locales anteriores de este alumno (filas UUID del editor viejo
     // o filas ya encoladas) para no acumular duplicados de la misma rutina.

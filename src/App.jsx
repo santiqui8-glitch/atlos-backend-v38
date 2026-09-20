@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useReducer, Suspense, lazy } from 'react'
 import { list, put, remove, seed } from './services/db'
-import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems } from './services/api'
+import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems, newOperationId } from './services/api'
 import { startSync, stopSync } from './services/sync'
 import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant, removeDeletedId } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
@@ -198,12 +198,14 @@ export default function App(){
     
     const data={nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null, fecha_ingreso:fecha}; 
     let cloudOk=false; 
-    try{ await api.crearAlumno(data); cloudOk=true }catch(err){ console.warn('crearAlumno api fallo',err.message)}
-    
-    if(!cloudOk){ 
+    // V44-B: una sola operationId para el intento online y el fallback encolado.
+    const opId=newOperationId();
+    try{ await api.crearAlumno(data,{operationId:opId}); cloudOk=true }catch(err){ console.warn('crearAlumno api fallo',err.message)}
+
+    if(!cloudOk){
       const localId=crypto.randomUUID();
       await put('students',{id:localId,name:nombreCompleto,apellido,dni:dni||'',phone:telefono,mail:mail||'',fecha_nacimiento:fecha_nac,edad:edad?Number(edad):null,enfoque,observaciones,joinedAt:fecha,status:'activo',createdAt:new Date().toISOString()});
-      queuePush('alumno', {...data, _localId:localId})
+      queuePush('alumno', {...data, _localId:localId}, {operationId:opId})
     } else if(dni||mail||enfoque||observaciones||apellido||fecha_nac){
       const ext=tenantGetJSON('alumnos-ext',{});
       ext[nombreCompleto.toLowerCase()]={apellido,dni,mail,fecha_nacimiento:fecha_nac,enfoque,observaciones};
@@ -217,7 +219,7 @@ export default function App(){
   const savePayment=async(e)=>{ e.preventDefault(); if(savingPago) return; savingPago=true; try{
     const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-'); const monto=Number(f.get('amount')); const fecha=f.get('date')||today(); const note=f.get('note')||'Cuota Mensual'; const metodo='Efectivo'
     const localId=crypto.randomUUID();
-    if(!isLocalUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo, _localId:localId}, {fecha}) } }
+    if(!isLocalUUID){ const opId=newOperationId(); try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo},{operationId:opId}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo, _localId:localId}, {fecha, operationId:opId}) } }
     await put('payments',{id:localId,_localId:localId,studentId:String(sid),amount:monto,date:fecha,note,metodo}); setModal(null); refresh() }finally{ savingPago=false } }
   const markAttendanceDNI=async(dni)=>{ // torniquete por DNI
     const alum=students.find(s=>String(s.dni)===String(dni).trim() || String(s.phone)===String(dni).trim())
@@ -230,7 +232,8 @@ export default function App(){
     try{
       const localId=crypto.randomUUID();
       const _fecha=today(); const _hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-      try{ await api.checkin(alumnoRef); lastCheckin.set(_ck,Date.now()); }catch(err){ await put('attendance',{id:localId,_localId:localId,studentId:alum.id,date:_fecha,time:_hora}); lastCheckin.set(_ck,Date.now()); if(/Failed to fetch|fetch/.test(String(err.message||''))) queuePush('checkin', {alumno_id:alumnoRef,_localId:localId}, {fecha:_fecha,hora:_hora}) }
+      const opId=newOperationId();
+      try{ await api.checkin(alumnoRef,{operationId:opId}); lastCheckin.set(_ck,Date.now()); }catch(err){ await put('attendance',{id:localId,_localId:localId,studentId:alum.id,date:_fecha,time:_hora}); lastCheckin.set(_ck,Date.now()); if(/Failed to fetch|fetch/.test(String(err.message||''))) queuePush('checkin', {alumno_id:alumnoRef,_localId:localId}, {fecha:_fecha,hora:_hora,operationId:opId}) }
       refresh()
       return alum
     }finally{ savingCheckin=false }
@@ -239,9 +242,10 @@ export default function App(){
   const saveClase=async(e)=>{ e.preventDefault(); if(savingClase) return; savingClase=true; try{
     const f=new FormData(e.currentTarget); const data={nombre:f.get('nombre'), dia_mes:f.get('dia')||'Lunes', hora_inicio:f.get('inicio')||'08:00', hora_fin:f.get('fin')||'09:00', capacidad: f.get('cap')==='Ilimitada'? 999 : Number(f.get('cap')||20), profesor:f.get('profesor')||''}
     const localId='clase-'+Date.now(); let ok=false; let serverId=null; let pendiente=false
+    const opId=newOperationId();
     if(navigator.onLine){
-      try{ const r=await api.crearClase(data); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId}) } }
-    } else { queuePush('clase',{...data,_localId:localId}); pendiente=true }
+      try{ const r=await api.crearClase(data,{operationId:opId}); ok=true; serverId=(r&&(r.id??r._id))||null }catch(err){ console.warn('crearClase api',err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('clase',{...data,_localId:localId},{operationId:opId}) } }
+    } else { queuePush('clase',{...data,_localId:localId},{operationId:opId}); pendiente=true }
     if(serverId) removeDeletedId('deleted-clases',serverId);
     if(!ok){ const local=tenantGetJSON('clases',[]); local.push({id: serverId?String(serverId):localId, serverId:serverId?String(serverId):null, ...data, inscriptos:0, pending:pendiente}); tenantSetJSON('clases',local) }
     setModal(null); refresh() }finally{ savingClase=false } }
@@ -249,18 +253,19 @@ export default function App(){
     if(savingProfesor) return; savingProfesor=true; try{
     const localId=Date.now().toString(); const localRec={id:localId, nombre, apellido, telefono:telefono||'', especialidad, nombreCompleto:`${nombre} ${apellido}`}
     let serverId=null; let pendiente=false
+    const opId=newOperationId();
     if(navigator.onLine){
-      try{ const r=await api.crearProfesor({nombre, apellido, telefono:telefono||'', especialidad}); serverId=(r&&(r.id??r._id))||null }
-      catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}) } }
-    } else { queuePush('profesor', {_localId:localId}); pendiente=true }
+      try{ const r=await api.crearProfesor({nombre, apellido, telefono:telefono||'', especialidad},{operationId:opId}); serverId=(r&&(r.id??r._id))||null }
+      catch(err){ console.warn('crearProfesor api fallo → encolado', err.message); pendiente=true; if(esErrorDeRed(err)){ queuePush('profesor', {_localId:localId}, {operationId:opId}) } }
+    } else { queuePush('profesor', {_localId:localId}, {operationId:opId}); pendiente=true }
     if(serverId) removeDeletedId('deleted-profesores',serverId);
     const arr=tenantGetJSON('profesores',[])
     arr.push(serverId ? {...localRec, id:String(serverId), serverId:String(serverId), pending:false} : {...localRec, pending:pendiente})
     tenantSetJSON('profesores',arr); setModal(null); refresh() }finally{ savingProfesor=false } }
-  const saveUsuario=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={usuario:f.get('usuario'), clave:f.get('clave'), rol:f.get('rol')||'Empleado'}; await api.crearUsuario(data); setModal(null); refresh() }
+  const saveUsuario=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={usuario:f.get('usuario'), clave:f.get('clave'), rol:f.get('rol')||'Empleado'}; await api.crearUsuario(data,{operationId:newOperationId()}); setModal(null); refresh() }
 
   const filtered=useMemo(()=> students.filter(s=>`${s.name} ${s.dni}`.toLowerCase().includes(query.toLowerCase())), [students,query])
-  const handleDeleteAlumno=async(id)=>{ if(!confirm('¿Eliminar alumno?')) return; const _sid=String(id??'').trim(); try{ if(/^\d+$/.test(_sid)) await api.eliminarAlumno(_sid); else await remove('students',id) }catch{ await remove('students',id) } refresh() }
+  const handleDeleteAlumno=async(id)=>{ if(!confirm('¿Eliminar alumno?')) return; const _sid=String(id??'').trim(); try{ if(/^\d+$/.test(_sid)) await api.eliminarAlumno(_sid,{operationId:newOperationId()}); else await remove('students',id) }catch{ await remove('students',id) } refresh() }
 
   const [gymConf,setGymConf]=useState(null)
   const [licencia,setLicencia]=useState(null)

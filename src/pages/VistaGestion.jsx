@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { api, queuePush, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { pushDeletedId } from '../services/tenant'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
@@ -59,7 +59,12 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
         if(_f.length!==_q.length) writeTenantQueue(_f);
       }catch{}
     };
-    if(!isUUID){ try{ await api.crearPago({alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}); pushDeletedId('deleted-pagos',selected.id); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(err){ console.warn('edit api fallo',err.message); if(String(err.message).includes('Failed to fetch')){ const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}; if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO}) } } }
+    if(!isUUID){ const opId=newOperationId(); const _patch={alumno_id:Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo};
+      // V44-B: editar in-place vía PUT /pagos/{id} (idempotente). Legacy crear+reemplazar solo si el servidor no conoce el id (404).
+      try{ await api.actualizarPago(selected.id, _patch, {operationId:opId}); dropPendingPago(); await remove('payments',selected.id); await put('payments',{id:selected.id,_localId:selected._localId||selected.id,studentId:String(sid),amount:data.monto,date:fechaISO,note:data.concepto,metodo:data.metodo}); setEdit(null); setSel(null); refresh(); return }
+      catch(err){ console.warn('edit api fallo',err.message); const _net=String(err.message||'').includes('Failed to fetch')||esErrorDeRed(err);
+        if(err&&err.status===404){ try{ await api.crearPago(_patch,{operationId:newOperationId()}); pushDeletedId('deleted-pagos',selected.id); dropPendingPago(); await remove('payments',selected.id); setEdit(null); setSel(null); refresh(); return }catch(e2){ console.warn('edit legacy fallo',e2.message) } }
+        else if(_net){ if(!coalescePago(_patch,fechaISO)) queuePush('pago', {..._patch, _localId:_lid}, {fecha:fechaISO, operationId:opId}) } } }
     await remove('payments',selected.id); await put('payments',{id:selected.id,_localId:selected._localId||selected.id,studentId:String(sid),amount:data.monto,date:fechaISO,note:data.concepto,metodo:data.metodo})
     coalescePago({alumno_id:isUUID?String(sid):Number(sid), monto:data.monto, concepto:data.concepto, metodo:data.metodo}, fechaISO);
     setEdit(null); setSel(null); refresh()

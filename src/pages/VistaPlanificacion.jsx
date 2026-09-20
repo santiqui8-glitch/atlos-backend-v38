@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { api, readTenantQueue, writeTenantQueue, sameQueueContext } from '../services/api'
+import { api, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
@@ -60,7 +60,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
     if(mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return alert('Mail inválido.')
     const isUUID=String(edit.id).includes('-')
     if(!isUUID){
-      try{ await api.actualizarAlumno(Number(edit.id),{nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null});
+      try{ await api.actualizarAlumno(Number(edit.id),{nombre:nombreCompleto, telefono, email:mail||'', edad:edad?Number(edad):null},{operationId:newOperationId()});
         const cur=students.find(x=>String(x.id)===String(edit.id))
         if(cur){ await put('students',{...cur, name:nombreCompleto, apellido, dni:dni||cur.dni, phone:telefono, mail, fecha_nacimiento:fecha_nac||cur.fecha_nacimiento||'', enfoque, observaciones, joinedAt:fecha, edad:edad?Number(edad):null})}
         // actualizar extMap también
