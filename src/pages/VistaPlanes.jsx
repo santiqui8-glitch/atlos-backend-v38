@@ -32,7 +32,7 @@ export default function VistaPlanes({students,routines,ejercicios}){
     <div style={{display:'flex',justifyContent:'center',margin:'10px 0 14px'}}>
       <div style={{position:'relative',width:'min(420px,95%)'}}>
         <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--muted)',fontSize:14}}>🔍</span>
-        <input value={qPlanes} onChange={e=>setQPlanes(e.target.value)} placeholder={tab==='alumnos'?'Buscar alumno...':'Buscar ejercicio...'} style={{width:'100%',padding:'10px 12px 10px 36px',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10,outline:'none'}} />
+        <input value={qPlanes} onChange={e=>setQPlanes(e.target.value)} placeholder={tab==='alumnos'?'Buscar alumno...':'Buscar ejercicio...'} aria-label="Buscar" className="field-search" />
       </div>
     </div>
     {tab==='alumnos'?<>

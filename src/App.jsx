@@ -305,7 +305,6 @@ export default function App(){
     const seen=new Set(); return arr.filter(n=>{ if(seen.has(n.id)) return false; seen.add(n.id); return true }).slice(0,20)
   },[students,payments,attendance])
   const [showNotifs,setShowNotifs]=useState(false)
-  useEffect(()=>{ if(notifs.length) console.log('🔔 ATLOS notifs',notifs) },[notifs.length])
   return <div className="app">
     <aside className="sidebar">
       <div className="brand"><div className="brand-logo"><img src="/logo.png" alt="ATLOS" width="256" height="175" onError={e=>{e.currentTarget.style.display='none'; const fb=e.currentTarget.nextSibling; if(fb) fb.style.display='grid'}}/><div className="logo-fallback" style={{display:'none'}}>A</div></div><div><b>ATLOS</b><span>Gestión de gimnasios</span></div></div>
@@ -317,7 +316,7 @@ export default function App(){
         <div style={{position:'relative'}}>
           <button onClick={()=>setShowNotifs(v=>!v)} title="Notificaciones" style={{position:'relative',width:40,height:40,borderRadius:10,border:'1px solid var(--card-border)',background:'var(--card)',cursor:'pointer',fontSize:18}}>🔔{notifs.length>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--danger)',color:'var(--text)',fontSize:11,fontWeight:800,padding:'2px 6px',borderRadius:999, minWidth:18,textAlign:'center'}}>{notifs.length}</span>}</button>
           {showNotifs&&<div style={{position:'absolute',top:'48px',right:0,width:340,maxHeight:420,overflow:'auto',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,.35)',zIndex:30}}>
-            <div style={{padding:'12px 14px',borderBottom:'1px solid var(--card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><b style={{fontSize:13}}>Notificaciones</b><button onClick={()=>setShowNotifs(false)} style={{border:0,background:'transparent',color:'var(--muted)',cursor:'pointer'}}>×</button></div>
+            <div style={{padding:'12px 14px',borderBottom:'1px solid var(--card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><b style={{fontSize:13}}>Notificaciones</b><button onClick={()=>setShowNotifs(false)} style={{border:0,background:'transparent',color:'var(--muted)',cursor:'pointer'}} aria-label="Cerrar notificaciones">×</button></div>
             {notifs.length? notifs.map(n=>(
               <div key={n.id} style={{display:'flex',gap:10,padding:'10px 12px',borderBottom:'1px solid var(--card-border)',alignItems:'flex-start'}}>
                 <span style={{fontSize:16}}>{n.icon}</span>

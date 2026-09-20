@@ -62,7 +62,7 @@ export default function VistaLicencias(){
         <div className="stat" style={{background:'rgba(239,68,68,.08)',border:'1px solid var(--danger)',color:'var(--danger)'}}><div className="stat-icon" aria-hidden="true">🔴</div><span>Vencidas</span><strong>{stats.vencidas}</strong><small>posibles bajas</small></div>
         <div className="stat purple"><div className="stat-icon" aria-hidden="true">💰</div><span>MRR estimado</span><strong>{money(stats.mrr)}</strong><small>por mes activo</small></div>
       </div>
-      <div style={{display:'flex',gap:8,margin:'14px 0 0'}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar por gym, código (HWID) o email..." style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10,padding:'10px 12px',outline:'none'}}/></div>
+      <div style={{display:'flex',gap:8,margin:'14px 0 0'}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar por gym, código (HWID) o email..." aria-label="Buscar licencias" className="field" style={{flex:1}}/></div>
       <p style={{fontSize:12,color:'var(--muted)',margin:'10px 0'}}>Solo <code>admin Dueño</code>. Cada fila = un gym con su <code>HWID</code> compartido multi-PC. Renová, bloqueá, desbloqueá o eliminá desde acá.</p>
       <TodasLicenciasTable rows={filtradas} onChange={fetchLic} />
       <div style={{marginTop:14,padding:12,background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:10}}>
@@ -90,16 +90,16 @@ function TodasLicenciasTable({rows=[],onChange}){
       return <div key={l.hwid} style={{display:'grid',gridTemplateColumns:'1.1fr 1.2fr 1.7fr 85px 90px 105px 115px 220px',gap:0,padding:'10px 8px',borderTop:'1px solid var(--card-border)',fontSize:12,background:isAct?'transparent':'rgba(239,68,68,.04)',alignItems:'center'}}>
         <span><b>{l.gym_name||l.cliente||'—'}</b></span>
         <span style={{fontSize:11,color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.email||'—'}</span>
-        <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{fontFamily:'monospace',fontSize:11}}>{l.hwid}</span><button className="ghost" onClick={()=>copiar(l.hwid)} title="Copiar HWID" style={{padding:'2px 6px',fontSize:11}}>{copied===l.hwid?'✓':'📋'}</button></span>
+        <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{fontFamily:'monospace',fontSize:11}}>{l.hwid}</span><button className="ghost sm" onClick={()=>copiar(l.hwid)} title="Copiar HWID" aria-label="Copiar HWID">{copied===l.hwid?'✓':'📋'}</button></span>
         <span style={{textTransform:'capitalize',fontSize:11}}>{String(l.tipo||'mensual')}</span>
         <span>{Number(l.precio||0)? money(l.precio):'—'}</span>
         <span>{vence? toDisplay(vence):'—'}</span>
         <span><span style={{background:chip[1]+'1e',color:chip[1],padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:800,whiteSpace:'nowrap'}}>{chip[0]}</span></span>
         <span style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
-          <button className="ghost" onClick={()=>renovar(l,1)} style={{padding:'4px 8px',fontSize:11,color:'var(--success)'}}>+1m</button>
-          <button className="ghost" onClick={()=>renovar(l,3)} style={{padding:'4px 8px',fontSize:11,color:'var(--success)'}}>+3m</button>
-          <button className="ghost" onClick={()=>handleBloquear(l)} style={{padding:'4px 8px',fontSize:11,color:isAct?'var(--danger)':'var(--success)'}}>{isAct?'Bloquear':'Desbloquear'}</button>
-          <button className="ghost" onClick={()=>handleEliminar(l.hwid)} style={{padding:'4px 8px',fontSize:11,color:'var(--danger)',borderColor:'var(--danger)'}}>Eliminar</button>
+          <button className="ghost sm success" onClick={()=>renovar(l,1)}>+1m</button>
+          <button className="ghost sm success" onClick={()=>renovar(l,3)}>+3m</button>
+          <button className={isAct?'ghost sm danger':'ghost sm success'} onClick={()=>handleBloquear(l)}>{isAct?'Bloquear':'Desbloquear'}</button>
+          <button className="ghost sm danger" onClick={()=>handleEliminar(l.hwid)}>Eliminar</button>
         </span>
       </div>
     })}

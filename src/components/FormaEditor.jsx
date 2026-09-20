@@ -139,14 +139,14 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
               <div key={dIdx} style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:10,padding:8}}>
                 <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
                   <input value={day.name} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], name:e.target.value}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'6px 8px',fontWeight:700}} />
-                  <button className='ghost' onClick={()=>removeDay(key,dIdx)} style={{padding:'4px 8px',color:'var(--danger)'}} aria-label="Quitar día">×</button>
+                  <button className='ghost sm danger' onClick={()=>removeDay(key,dIdx)} aria-label="Quitar día">×</button>
                 </div>
                 {day.exercises.map((ex, eIdx)=>(
                   <div key={eIdx} style={{padding:'6px 0',borderBottom:'1px solid var(--card-border)'}}>
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
                       <span style={{flex:1,fontSize:12,fontWeight:600}}>{ex.name}</span>
                       <input value={ex.detail} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], exercises: copy[dIdx].exercises.map((ee,i)=> i===eIdx? {...ee, detail:e.target.value}: ee)}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} style={{width:90,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'4px',textAlign:'center',fontFamily:'monospace',fontSize:11}} />
-                      <button className='ghost' onClick={()=>removeEx(key,dIdx,eIdx)} style={{padding:'2px 6px',color:'var(--danger)'}} aria-label="Quitar ejercicio">×</button>
+                      <button className='ghost sm danger' onClick={()=>removeEx(key,dIdx,eIdx)} aria-label="Quitar ejercicio">×</button>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4,paddingLeft:2}}>
                       <span style={{fontSize:11,color:'var(--muted)'}}>Peso</span>
