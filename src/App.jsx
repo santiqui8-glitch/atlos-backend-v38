@@ -21,6 +21,12 @@ const VistaPlanes = lazy(() => import('./pages/VistaPlanes.jsx'))
 const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
 const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
 
+// DEV PREVIEW ONLY — never active outside Vite development mode.
+// Bypass VISUAL del overlay de licencia vencida, solo para revisar el
+// rediseño en localhost. Requiere DEV + VITE_DEV_PREVIEW=true. En build de
+// producción import.meta.env.DEV es false y el bypass no puede activarse.
+// No altera auth, tenant, RBAC, licencias reales, backend ni offline engine.
+const DEV_PREVIEW = import.meta.env.DEV === true && import.meta.env.VITE_DEV_PREVIEW === "true";
 // BLOQUE 4F: guards de doble submit (sin cambiar UI ni payloads).
 // V39-11B: in-flight protection de refresh (sin solapamientos).
 let refreshing=false;
@@ -51,21 +57,27 @@ export default function App(){
   const [modal,setModal]=useState(null)
   const [renewAlumno,setRenewAlumno]=useState(null)
   const [query,setQuery]=useState('')
+  // DEV PREVIEW ONLY — declarado junto al resto de hooks iniciales (evita TDZ:
+  // se usa en línea ~76) y antes de todos los early returns (Rules of Hooks).
+  const [preview,setPreview]=useState(false);
   const [,force]=useReducer(x=>x+1,0)
 
+  // V44-D-05: etiquetas visibles según referencia oficial (los ids internos no cambian).
   const navBase=[
-    ['inicio','⌂','Inicio'],
-    ['gestion','💳','Gestión'],
+    ['inicio','⌂','Dashboard'],
+    ['gestion','💳','Pagos'],
     ['reportes','📊','Reportes'],
     ['planificacion','👥','Alumnos'],
     ['asistencia','✓','Asistencia'],
     ['turnos','🗓','Clases'],
-    ['planes','🏋','Planes'],
+    ['planes','🏋','Rutinas'],
     ['profesores','🎓','Profesores'],
     ['personal','👤','Personal'],
   ]
   let nav=rol==='Empleado' ? navBase.filter(([k])=>!['personal','reportes'].includes(k)) : [...navBase]
-  if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Ventas']]
+  if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Licencias']]
+  // DEV PREVIEW ONLY — permisos mínimos de navegación visual: sin personal ni licencias.
+  if(preview) nav=nav.filter(([k])=>!['personal','licencias'].includes(k))
 
   const refresh=async()=>{
     // V39-11B: sin solapamientos + snapshot de tenant ANTES de la primera
@@ -269,20 +281,17 @@ export default function App(){
 
   const [gymConf,setGymConf]=useState(null)
   const [licencia,setLicencia]=useState(null)
-  useEffect(()=>{ if(logged){ if(!isTokenValid()){ clearAuth(); setLogged(false); return } api.me().then(u=>{       if(u?.rol){ setRol(u.rol); localStorage.setItem('atlos-rol',u.rol)} if(u?.usuario){ setUsuario(u.usuario); localStorage.setItem('atlos-usuario',u.usuario) }
+  // DEV PREVIEW ONLY — sesión visual local y efímera (sin token, sin /auth/login,
+  // sin backend). Reutiliza identidad local guardada o marca "Preview" con rol
+  // mínimo. No escribe localStorage, IDB ni licencia. Solo bajo DEV_PREVIEW.
+  const enterPreview=()=>{ if(!DEV_PREVIEW) return; try{ setUsuario(localStorage.getItem('atlos-usuario')||'Preview'); setRol(localStorage.getItem('atlos-rol')||'Empleado') }catch{ setUsuario('Preview'); setRol('Empleado') } setPreview(true); setLogged(true) };
+  useEffect(()=>{ if(logged && !preview){ if(!isTokenValid()){ clearAuth(); setLogged(false); return } api.me().then(u=>{       if(u?.rol){ setRol(u.rol); localStorage.setItem('atlos-rol',u.rol)} if(u?.usuario){ setUsuario(u.usuario); localStorage.setItem('atlos-usuario',u.usuario) }
     }).catch(e=>{ const msg=String(e.message||''); if(msg.includes('No autorizado')||msg.includes('expirada')||msg.includes('401')||msg.includes('403')){ clearAuth(); setLogged(false) } })
     api.getGymConfig().then(cfg=>{ if(cfg && typeof cfg==='object'){ setGymConf(cfg); tenantSetJSON('gymconf',cfg) } }).catch(()=>{ const local=tenantGetJSON('gymconf',null); if(local) setGymConf(local) })
-  } },[])
+  } },[preview])
   useEffect(()=>{ if(!logged) return; const checkLic=async()=>{ try{ const lic=await api.checkLicencia(); setLicencia(lic); if(!lic.activo){ console.warn('Licencia vencida',lic) } }catch{} }; checkLic(); const t=setInterval(checkLic, 5*60*1000); return ()=>clearInterval(t) },[logged])
-  if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol)){
-    return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearTenantEntityData(); clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
-  }
-  if(!logged){
-    const gymHwid=getGymHWID();
-    if(!gymHwid) return <GymGate onOk={force}/>;
-    return <Login onChangeGym={force} onLogin={async (u,p)=>{ try{ const r=await api.login(u,p); if(!r || (!r.token && !r.access_token)) return 'Respuesta inválida del servidor'; const tok=r.token||r.access_token; setToken(tok); const r2=await api.me().catch(()=>null); const rolResp=r2?.rol||r.rol||r.role||getRole()||'Dueño'; const usu=r2?.usuario||r.usuario||r.nombre||r.user||u; localStorage.setItem('atlos-session','1'); localStorage.setItem('atlos-usuario',usu); localStorage.setItem('atlos-rol',rolResp); setUsuario(usu); setRol(rolResp); startSession(); adoptOwnQueueItems(); setLogged(true); return null; }catch(e){ return e.message } }}/>
-  }
-
+  // FIX BLUE SCREEN: estos hooks deben correr en TODOS los renders, antes de
+  // cualquier early return (Rules of Hooks). Contenido 100% intacto.
   const notifs=useMemo(()=>{
     const arr=[]
     const hoy=new Date(); hoy.setHours(0,0,0,0)
@@ -310,6 +319,17 @@ export default function App(){
     const seen=new Set(); return arr.filter(n=>{ if(seen.has(n.id)) return false; seen.add(n.id); return true }).slice(0,20)
   },[students,payments,attendance])
   const [showNotifs,setShowNotifs]=useState(false)
+  if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol) && !DEV_PREVIEW){
+    return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearTenantEntityData(); clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
+  }
+  // DEV PREVIEW ONLY — botón de entrada al shell visual, solo en desarrollo.
+  const previewBtn=DEV_PREVIEW?<button type="button" className="ghost" style={{position:'fixed',bottom:16,right:16,zIndex:50}} onClick={enterPreview}>👁 Entrar en modo preview</button>:null;
+  if(!logged){
+    const gymHwid=getGymHWID();
+    if(!gymHwid) return <>{previewBtn}<GymGate onOk={force}/></>;
+    return <>{previewBtn}<Login onChangeGym={force} onLogin={async (u,p)=>{ try{ const r=await api.login(u,p); if(!r || (!r.token && !r.access_token)) return 'Respuesta inválida del servidor'; const tok=r.token||r.access_token; setToken(tok); const r2=await api.me().catch(()=>null); const rolResp=r2?.rol||r.rol||r.role||getRole()||'Dueño'; const usu=r2?.usuario||r.usuario||r.nombre||r.user||u; localStorage.setItem('atlos-session','1'); localStorage.setItem('atlos-usuario',usu); localStorage.setItem('atlos-rol',rolResp); setUsuario(usu); setRol(rolResp); startSession(); adoptOwnQueueItems(); setLogged(true); return null; }catch(e){ return e.message } }}/></>
+  }
+
   return <div className="app">
     <aside className="sidebar">
       <div className="brand"><div className="brand-logo"><img src="/logo.png" alt="ATLOS" width="256" height="175" onError={e=>{e.currentTarget.style.display='none'; const fb=e.currentTarget.nextSibling; if(fb) fb.style.display='grid'}}/><div className="logo-fallback" style={{display:'none'}}>A</div></div><div><b>ATLOS</b><span>Gestión de gimnasios</span></div></div>
@@ -317,21 +337,22 @@ export default function App(){
       <div className="sidebar-foot"><div className={`status ${online?'on':'off'}`}></div><div><b>{online?'Online':'Modo offline'}</b><span>{usuario} · {rol}</span></div></div>
     </aside>
     <main className="main">
+      {preview&&<div role="status" style={{marginBottom:12,padding:'8px 14px',borderRadius:10,border:'1px dashed var(--accent)',background:'rgba(27,150,236,.08)',color:'var(--accent-hover)',fontSize:12,fontWeight:800,letterSpacing:'.06em',textAlign:'center'}}>👁 MODO PREVIEW LOCAL — solo revisión visual, sin sesión real</div>}
       <header><div><h1>{nav.find(x=>x[0]===page)?.[2]||page}</h1><p>{usuario} · {rol} · {fmtHoy()} · {online?'☁ Sincronización':'◉ Local'}</p></div><div className="header-actions">
-        <div style={{position:'relative'}}>
-          <button onClick={()=>setShowNotifs(v=>!v)} title="Notificaciones" style={{position:'relative',width:40,height:40,borderRadius:10,border:'1px solid var(--card-border)',background:'var(--card)',cursor:'pointer',fontSize:18}}>🔔{notifs.length>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--danger)',color:'var(--text)',fontSize:11,fontWeight:800,padding:'2px 6px',borderRadius:999, minWidth:18,textAlign:'center'}}>{notifs.length}</span>}</button>
-          {showNotifs&&<div style={{position:'absolute',top:'48px',right:0,width:340,maxHeight:420,overflow:'auto',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,.35)',zIndex:30}}>
-            <div style={{padding:'12px 14px',borderBottom:'1px solid var(--card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><b style={{fontSize:13}}>Notificaciones</b><button onClick={()=>setShowNotifs(false)} style={{border:0,background:'transparent',color:'var(--muted)',cursor:'pointer'}} aria-label="Cerrar notificaciones">×</button></div>
+        <div className="notif-wrap">
+          <button className="icon-btn" onClick={()=>setShowNotifs(v=>!v)} title="Notificaciones" aria-label="Notificaciones" aria-expanded={showNotifs}>🔔{notifs.length>0&&<span className="notif-badge">{notifs.length}</span>}</button>
+          {showNotifs&&<div className="notif-pop" role="dialog" aria-label="Notificaciones">
+            <div className="notif-head"><b>Notificaciones</b><button className="notif-x" onClick={()=>setShowNotifs(false)} aria-label="Cerrar notificaciones">×</button></div>
             {notifs.length? notifs.map(n=>(
-              <div key={n.id} style={{display:'flex',gap:10,padding:'10px 12px',borderBottom:'1px solid var(--card-border)',alignItems:'flex-start'}}>
-                <span style={{fontSize:16}}>{n.icon}</span>
-                <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600, color:n.color}}>{n.text}</div><div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>ATLOS trabaja para vos</div></div>
+              <div key={n.id} className="notif-item">
+                <span aria-hidden="true">{n.icon}</span>
+                <div><div className="notif-text" style={{color:n.color}}>{n.text}</div><div className="notif-sub">ATLOS trabaja para vos</div></div>
               </div>
-            )) : <div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Sin notificaciones — todo al día ✓</div>}
-            <div style={{padding:'8px 12px',textAlign:'center'}}><button className="ghost" style={{width:'100%'}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>
+            )) : <div className="notif-empty">Sin notificaciones — todo al día ✓</div>}
+            <div className="notif-foot"><button className="ghost" style={{width:'100%'}} onClick={()=>setShowNotifs(false)}>Cerrar</button></div>
           </div>}
         </div>
-        <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
+        <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setPreview(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
       <Suspense fallback={<div style={{padding:20,minHeight:400,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} onNew={()=>setModal('payment')} refresh={refresh}/>}

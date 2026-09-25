@@ -9,7 +9,10 @@ import { Empty } from '../components/ui.jsx'
 export default function VistaProfesores({profesores,onNew,refresh}){
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null)
+  const [q,setQ]=useState('') // V44-D-13: filtro local (no toca datos ni API)
   const selected=profesores.find(p=>String(p.id)===String(sel))
+  const qn=q.trim().toLowerCase();
+  const filtrados=!qn?profesores:profesores.filter(p=>`${p.nombre||''} ${p.apellido||''} ${p.especialidad||''} ${p.telefono||''}`.toLowerCase().includes(qn));
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná un profesor de la lista.')
     if(!confirm(`¿Eliminar profesor "${selected.nombreCompleto||`${selected.nombre} ${selected.apellido}`}"?`)) return
@@ -54,17 +57,20 @@ export default function VistaProfesores({profesores,onNew,refresh}){
     setEdit(null); refresh()
   }
   return <section className="panel">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><h3 style={{margin:0,fontSize:14}}>Profesores</h3><div style={{display:'flex',gap:8}}><button className="primary" onClick={onNew}>+ NUEVO PROFESOR</button><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost danger" onClick={handleDelete}>ELIMINAR</button></div></div>
-    <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
+    <div className="page-head"><div><h2>Profesores</h2><p>Gestioná el equipo del gimnasio · {profesores.length} profesores</p></div><div className="page-actions"><button className="primary" onClick={onNew}>+ Nuevo profesor</button><button className="ghost" onClick={handleEdit}>Editar</button><button className="ghost danger" onClick={handleDelete}>Eliminar</button></div></div>
+    <div className="toolbar">
+      <div className="search-wrap"><input className="field-search" aria-label="Buscar profesor" placeholder="🔎 Buscar por nombre, especialidad o teléfono..." value={q} onChange={e=>setQ(e.target.value)}/></div>
+    </div>
+    <div className="table" style={{marginTop:0,overflow:'hidden'}}>
       <div className="thead profesores"><span>ID</span><span>Nombre</span><span>Apellido</span><span>Teléfono</span><span>Especialidad</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>
-        {profesores.map(p=>{
+        {filtrados.map(p=>{
           const isSel=String(sel)===String(p.id)
           return <div key={p.id} onClick={()=>setSel(p.id)} onDoubleClick={handleEdit} className={isSel?'trow sel profesores':'trow profesores'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(p.id)}}}>
-            <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span><b>{p.nombre}</b></span><span>{p.apellido}</span><span>{p.telefono||'—'}</span><span><span style={{background:'rgba(99,102,241,.12)',color:'var(--info)',padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:700}}>{p.especialidad}</span></span>
+            <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span><b>{p.nombre}</b></span><span>{p.apellido}</span><span>{p.telefono||'—'}</span><span><span className="badge info">{p.especialidad}</span></span>
           </div>
         })}
-        {!profesores.length&&<Empty text="No hay profesores. Creá el primero con + NUEVO PROFESOR."/>}
+        {!filtrados.length&&<Empty text={q?"Sin resultados para la búsqueda.":"No hay profesores. Creá el primero con + Nuevo profesor."}/>}
         {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',borderTop:'1px solid var(--card-border)'}}>Seleccionado: {selected.nombreCompleto||`${selected.nombre} ${selected.apellido}`} · Doble click para editar</div>}
       </div>
     </div>
@@ -73,7 +79,7 @@ export default function VistaProfesores({profesores,onNew,refresh}){
         <div className="form2"><label>Nombre*<input name="nombre" defaultValue={edit.nombre} required/></label><label>Apellido*<input name="apellido" defaultValue={edit.apellido} required/></label></div>
         <label>Teléfono<input name="telefono" defaultValue={edit.telefono||''}/></label>
         <label>Especialidad<select name="especialidad" defaultValue={edit.especialidad||'General'}><option>General</option><option>Musculación</option><option>Funcional</option><option>CrossFit</option><option>Yoga</option><option>Pilates</option><option>Spinning</option><option>Boxeo</option></select></label>
-        <button className="primary wide">GUARDAR CAMBIOS</button>
+        <button className="primary wide">Guardar cambios</button>
       </form>
     </div></div>}
   </section>

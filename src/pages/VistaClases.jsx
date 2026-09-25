@@ -12,8 +12,11 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null)
   const [inscribir,setInscribir]=useState(null)
+  const [q,setQ]=useState('') // V44-D-12: filtro local (no toca datos ni API)
   const selected=clases.find(c=>String(c.id)===String(sel))
   const totalIns=clases.reduce((a,c)=>a+Number(c.inscriptos||c.inscriptos_count||0),0)
+  const qn=q.trim().toLowerCase();
+  const filtradas=!qn?clases:clases.filter(c=>`${c.nombre||c.name||''} ${c.profesor||''} ${c.dia_mes||c.dia||''}`.toLowerCase().includes(qn));
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná una clase de la lista.')
     if(!confirm(`¿Eliminar clase "${selected.nombre||selected.name}"?`)) return
@@ -101,27 +104,35 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
     }finally{ savingInscribir=false }
   }
   return <section className="panel">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-      <h3 style={{margin:0,fontSize:14}}>Clases</h3>
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-        <button className="primary" onClick={onNew}>+ NUEVA CLASE</button>
-        <button className="ghost" onClick={handleEdit}>EDITAR</button>
-        <button className="ghost danger" onClick={handleDelete}>ELIMINAR</button>
-        <button className="primary sky" onClick={handleInscribir}>INSCRIBIR</button>
+    <div className="page-head">
+      <div><h2>Clases</h2><p>Organizá horarios, cupos e inscripciones · {clases.length} clases</p></div>
+      <div className="page-actions">
+        <button className="primary" onClick={onNew}>+ Nueva clase</button>
+        <button className="primary sky" onClick={handleInscribir}>+ Inscribir alumno</button>
+        <button className="ghost" onClick={handleEdit}>Editar</button>
+        <button className="ghost danger" onClick={handleDelete}>Eliminar</button>
       </div>
     </div>
-    <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:12}}><div className="stat blue"><div className="stat-icon" aria-hidden="true">🗓</div><span>CLASES</span><strong>{clases.length}</strong></div><div className="stat orange"><div className="stat-icon" aria-hidden="true">👥</div><span>INSCRIPCIONES</span><strong>{totalIns}</strong></div></div>
-    <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
-      <div className="thead clases"><span>ID</span><span>Clase</span><span>Día</span><span>Inicio</span><span>Fin</span><span>Cap.</span><span>Profesor</span><span>Insc.</span></div>
+    <div className="cards" style={{gridTemplateColumns:'1fr 1fr',marginTop:0}}><div className="stat blue"><div className="stat-icon" aria-hidden="true">🗓</div><span>Clases</span><strong>{clases.length}</strong></div><div className="stat accent"><div className="stat-icon" aria-hidden="true">👥</div><span>Inscripciones</span><strong>{totalIns}</strong></div></div>
+    <div className="toolbar">
+      <div className="search-wrap"><input className="field-search" aria-label="Buscar clase" placeholder="🔎 Buscar por clase, profesor o día..." value={q} onChange={e=>setQ(e.target.value)}/></div>
+    </div>
+    <div className="table" style={{marginTop:0,overflow:'hidden'}}>
+      <div className="thead clases"><span>ID</span><span>Clase</span><span>Día</span><span>Inicio</span><span>Fin</span><span>Cap.</span><span>Profesor</span><span>Cupo</span></div>
       <div style={{maxHeight:380,overflow:'auto'}}>
-        {clases.map(c=>{
+        {filtradas.map(c=>{
           const isSel=String(sel)===String(c.id)
+          // V44-D-12: cupo visual con datos existentes (capacidad 999 = Ilimitada).
+          const capRaw=c.capacidad??c.cap; const cap=(capRaw==null||capRaw===''||Number(capRaw)===999)?null:Number(capRaw);
+          const ins=Number(c.inscriptos||c.inscriptos_count||0);
+          const pct=cap?Math.min(100,Math.round(ins/cap*100)):0;
+          const full=cap!=null&&ins>=cap;
           return <div key={c.id} onClick={()=>setSel(c.id)} onDoubleClick={handleEdit} className={isSel?'trow sel clases':'trow clases'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(c.id)}}}>
-            <span style={{fontFamily:'monospace'}} className="muted-text">{String(c.id).slice(0,6)}</span><span><b>{c.nombre||c.name}</b></span><span>{c.dia_mes||c.dia||'-'}</span><span>{c.hora_inicio||c.inicio||'-'}</span><span>{c.hora_fin||c.fin||'-'}</span><span>{c.capacidad||c.cap||'-'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.profesor||'—'}</span><span style={{fontWeight:700,textAlign:'center'}}>{c.inscriptos||c.inscriptos_count||0}</span>
+            <span style={{fontFamily:'monospace'}} className="muted-text">{String(c.id).slice(0,6)}</span><span><b>{c.nombre||c.name}</b></span><span>{c.dia_mes||c.dia||'-'}</span><span>{c.hora_inicio||c.inicio||'-'}</span><span>{c.hora_fin||c.fin||'-'}</span><span>{cap==null?(Number(capRaw)===999?'∞':(c.capacidad||c.cap||'-')):cap}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.profesor||'—'}</span><span style={{fontWeight:700,textAlign:'center'}}>{ins}{cap!=null?`/${cap}`:''}{cap!=null&&<span className="cupo-bar" title={full?'Clase completa':`${ins} de ${cap}`}><i className={full?'full':''} style={{width:pct+'%'}}/></span>}</span>
           </div>
         })}
-        {!clases.length&&<Empty text="No hay clases. Creá la primera con + NUEVA CLASE."/>}
-        {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',borderTop:'1px solid var(--card-border)'}}>Seleccionado: {selected.nombre||selected.name} · Doble click para editar · INSCRIBIR para anotar alumno</div>}
+        {!filtradas.length&&<Empty text={q?"Sin resultados para la búsqueda.":"No hay clases. Creá la primera con + Nueva clase."}/>}
+        {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',borderTop:'1px solid var(--card-border)'}}>Seleccionado: {selected.nombre||selected.name} · Doble click para editar · + Inscribir alumno para anotar</div>}
       </div>
     </div>
     {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Clase</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
@@ -130,13 +141,13 @@ export default function VistaClases({clases,students,profesores=[],onNew,refresh
         <div className="form2"><label>Día<select name="dia" defaultValue={edit.dia_mes||edit.dia||'Lunes'} required><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></label><label>Profesor<select name="profesor" defaultValue={edit.profesor||''} required><option value="">Seleccionar...</option>{profesores.map(p=><option key={p.id} value={p.nombreCompleto||`${p.nombre} ${p.apellido}`}>{p.nombreCompleto||`${p.nombre} ${p.apellido}`} — {p.especialidad}</option>)}{!profesores.length&&<option disabled>No hay profesores — cargalos en Profesores</option>}</select></label></div>
         <div className="form2"><label>Inicio<input name="inicio" type="time" defaultValue={edit.hora_inicio||edit.inicio||'08:00'}/></label><label>Fin<input name="fin" type="time" defaultValue={edit.hora_fin||edit.fin||'09:00'}/></label></div>
         <label>Capacidad<select name="cap" defaultValue={String(edit.capacidad||edit.cap||20)==='999'?'Ilimitada':String(edit.capacidad||edit.cap||20)}><option>2</option><option>4</option><option>6</option><option>8</option><option>10</option><option>12</option><option>14</option><option>16</option><option>18</option><option>20</option><option>22</option><option>24</option><option>26</option><option>28</option><option>30</option><option>Ilimitada</option></select></label>
-        <button className="primary wide">GUARDAR CAMBIOS</button>
+        <button className="primary wide">Guardar cambios</button>
       </form>
     </div></div>}
     {inscribir&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setInscribir(null)}}><div className="modal"><div className="modal-head"><h3>Inscribir a {inscribir.nombre||inscribir.name}</h3><button onClick={()=>setInscribir(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={doInscribir} onKeyDown={onEnterNext} className="form">
         <label>Alumno<select name="alumno" required><option value="">Seleccionar...</option>{students.map(s=><option key={s.id} value={s.id}>{s.name} — DNI {s.dni||'—'}</option>)}</select></label>
-        <button className="primary wide">INSCRIBIR</button>
+        <button className="primary wide">Inscribir alumno</button>
       </form>
     </div></div>}
   </section>

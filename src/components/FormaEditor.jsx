@@ -17,6 +17,8 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
   const [lib,setLib]=useState(()=> library.length?library: tenantGetJSON('library',[]))
   const [qLib,setQLib]=useState('')
   const [openDrop,setOpenDrop]=useState(null)
+  // V44-D-09: semana visible (tabs). Mismo estado s1-s4, solo presentación.
+  const [semTab,setSemTab]=useState('1')
   useEffect(()=>{ if(!lib.length){ api.exercisesLibrary().then(d=>{ if(Array.isArray(d)&&d.length){ setLib(d); tenantSetJSON('library',d) } else { const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'},{id:4,name:'Dominadas',focus:'hipertrofia',muscle_group:'Espalda'},{id:5,name:'Press militar',focus:'fuerza',muscle_group:'Hombros'},{id:6,name:'Curl bíceps',focus:'hipertrofia',muscle_group:'Brazos'}]; setLib(demo); tenantSetJSON('library',demo) } }).catch(()=>{ const demo=[{id:1,name:'Press banca',focus:'hipertrofia',muscle_group:'Pecho'},{id:2,name:'Sentadilla',focus:'fuerza',muscle_group:'Piernas'},{id:3,name:'Peso muerto',focus:'fuerza',muscle_group:'Espalda'}]; if(!lib.length) setLib(demo) }) } },[])
   useEffect(()=>{
     const existing=routines.filter(r=>String(r.studentId||r.alumno_id)===String(student.id))
@@ -71,6 +73,27 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
   }
   const removeEx=(k, dayIdx, exIdx)=>{
     const upd=(arr,setter)=>{ const copy=[...arr]; copy[dayIdx]={...copy[dayIdx], exercises: copy[dayIdx].exercises.filter((_,i)=>i!==exIdx)}; setter(copy) }
+    if(k==='1') upd(s1,setS1); else if(k==='2') upd(s2,setS2); else if(k==='3') upd(s3,setS3); else upd(s4,setS4)
+  }
+  // V44-D-09: operaciones locales de presentación (no cambian persistencia).
+  const dupEx=(k, dayIdx, exIdx)=>{
+    const upd=(arr,setter)=>{ const copy=[...arr]; const exs=[...copy[dayIdx].exercises]; exs.splice(exIdx+1,0,{...exs[exIdx]}); copy[dayIdx]={...copy[dayIdx], exercises:exs}; setter(copy) }
+    if(k==='1') upd(s1,setS1); else if(k==='2') upd(s2,setS2); else if(k==='3') upd(s3,setS3); else upd(s4,setS4)
+  }
+  const moveEx=(k, dayIdx, exIdx, dir)=>{
+    const upd=(arr,setter)=>{ const copy=[...arr]; const exs=[...copy[dayIdx].exercises]; const j=exIdx+dir; if(j<0||j>=exs.length) return; const t=exs[exIdx]; exs[exIdx]=exs[j]; exs[j]=t; copy[dayIdx]={...copy[dayIdx], exercises:exs}; setter(copy) }
+    if(k==='1') upd(s1,setS1); else if(k==='2') upd(s2,setS2); else if(k==='3') upd(s3,setS3); else upd(s4,setS4)
+  }
+  const dupDay=(k, idx)=>{
+    const get=()=> k==='1'?s1:k==='2'?s2:k==='3'?s3:s4;
+    const set=v=>{ if(k==='1') setS1(v); else if(k==='2') setS2(v); else if(k==='3') setS3(v); else setS4(v) };
+    const arr=get(); const d=arr[idx]; if(!d) return;
+    set([...arr.slice(0,idx+1), {...d, name:d.name+' (copia)', exercises:d.exercises.map(e=>({...e}))}, ...arr.slice(idx+1)])
+  }
+  // V44-D-09: series/reps se editan separados pero persisten en `detail` ("S × R").
+  const splitDetail=(detail)=>{ const p=String(detail||'').split('×'); return [(p[0]||'').trim(), (p[1]||'').trim()] }
+  const setDetail=(k, plan, dayIdx, exIdx, sv, rv)=>{
+    const upd=(arr,setter)=>{ const copy=[...arr]; copy[dayIdx]={...copy[dayIdx], exercises: copy[dayIdx].exercises.map((ee,i)=> i===exIdx? {...ee, detail:`${sv} × ${rv}`}: ee)}; setter(copy) }
     if(k==='1') upd(s1,setS1); else if(k==='2') upd(s2,setS2); else if(k==='3') upd(s3,setS3); else upd(s4,setS4)
   }
   const guardar=async()=>{
@@ -131,36 +154,48 @@ export default function FormaEditor({student,mode,library=[],routines=[],onClose
       <button className='primary' onClick={guardar} style={{marginLeft:'auto'}}>GUARDAR Y DESCARGAR</button>
       <button className='ghost' onClick={onClose}>Cerrar</button>
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:16,padding:16, background:'var(--bg)'}}>
-      {sems.map(([key,plan,title])=>(
+    <div style={{display:'flex',gap:8,padding:'12px 16px 0',alignItems:'center',flexWrap:'wrap',background:'var(--bg)'}}>
+      <div className="rx-weekbar" role="tablist" aria-label="Semanas">
+        {sems.map(([key,plan,title])=>{ const n=plan.reduce((a,d)=>a+(d.exercises?.length||0),0); return <button key={key} role="tab" aria-selected={semTab===key} className={semTab===key?'rx-weektab active':'rx-weektab'} onClick={()=>setSemTab(key)}>{title} · {n} ej.</button> })}
+      </div>
+    </div>
+    <div style={{display:'grid',gap:16,padding:16, background:'var(--bg)'}}>
+      {sems.filter(([key])=>key===semTab).map(([key,plan,title])=>(
         <div key={key} style={{background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:10,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-          <div style={{background:'var(--accent)',color:'var(--text)',textAlign:'center',padding:'8px',fontFamily:'monospace',fontSize:11,fontWeight:800}}>{title}</div>
-          <div style={{flex:1,overflow:'auto',maxHeight:'65vh',minHeight:320,padding:8,display:'grid',gap:8}}>
+          <div style={{background:'var(--accent)',color:'#fff',textAlign:'center',padding:'8px',fontFamily:'monospace',fontSize:11,fontWeight:800}}>{title} · {plan.reduce((a,d)=>a+(d.exercises?.length||0),0)} ejercicios</div>
+          <div style={{flex:1,overflow:'auto',padding:8,display:'grid',gap:8,alignContent:'start'}}>
             {!plan.length&&<div style={{textAlign:'center',padding:20,color:'var(--muted)',fontSize:12}}>Vacía — usa Auto-generar o agrega días</div>}
             {plan.map((day, dIdx)=>(
               <div key={dIdx} style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:10,padding:8}}>
                 <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
-                  <input value={day.name} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], name:e.target.value}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'6px 8px',fontWeight:700}} />
+                  <input value={day.name} aria-label="Nombre del día" onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], name:e.target.value}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} style={{flex:1,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'6px 8px',fontWeight:700}} />
+                  <span className="rx-dayname">{day.exercises.length} ej.</span>
+                  <button className='rx-iconbtn' onClick={()=>dupDay(key,dIdx)} title="Duplicar día" aria-label="Duplicar día">⧉</button>
                   <button className='ghost sm danger' onClick={()=>removeDay(key,dIdx)} aria-label="Quitar día">×</button>
                 </div>
-                {day.exercises.map((ex, eIdx)=>(
-                  <div key={eIdx} style={{padding:'6px 0',borderBottom:'1px solid var(--card-border)'}}>
-                    <div style={{display:'flex',alignItems:'center',gap:6}}>
-                      <span style={{flex:1,fontSize:12,fontWeight:600}}>{ex.name}</span>
-                      <input value={ex.detail} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], exercises: copy[dIdx].exercises.map((ee,i)=> i===eIdx? {...ee, detail:e.target.value}: ee)}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} style={{width:90,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'4px',textAlign:'center',fontFamily:'monospace',fontSize:11}} />
-                      <button className='ghost sm danger' onClick={()=>removeEx(key,dIdx,eIdx)} aria-label="Quitar ejercicio">×</button>
+                {day.exercises.map((ex, eIdx)=>{ const [sv,rv]=splitDetail(ex.detail); return (
+                  <div key={eIdx} style={{padding:'8px 6px',borderBottom:'1px solid var(--card-border)',display:'flex',gap:8,alignItems:'flex-start'}}>
+                    <span className="rx-num" aria-hidden="true">{String(eIdx+1).padStart(2,'0')}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:700}}>{ex.name}</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginTop:6}}>
+                        <div><span className="rx-minilabel">Series</span><input className="rx-mini" value={sv} inputMode="numeric" aria-label={`Series de ${ex.name}`} onChange={e=>setDetail(key,plan,dIdx,eIdx,e.target.value,rv)} /></div>
+                        <div><span className="rx-minilabel">Reps</span><input className="rx-mini" value={rv} aria-label={`Repeticiones de ${ex.name}`} onChange={e=>setDetail(key,plan,dIdx,eIdx,sv,e.target.value)} /></div>
+                        <div><span className="rx-minilabel">Peso kg</span><input className="rx-mini" value={ex.peso||''} placeholder="0" inputMode="decimal" aria-label={`Peso de ${ex.name}`} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], exercises: copy[dIdx].exercises.map((ee,i)=> i===eIdx? {...ee, peso:e.target.value}: ee)}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} /></div>
+                      </div>
                     </div>
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4,paddingLeft:2}}>
-                      <span style={{fontSize:11,color:'var(--muted)'}}>Peso</span>
-                      <input value={ex.peso||''} onChange={e=>{ const copy=[...plan]; copy[dIdx]={...copy[dIdx], exercises: copy[dIdx].exercises.map((ee,i)=> i===eIdx? {...ee, peso:e.target.value}: ee)}; if(key==='1') setS1(copy); else if(key==='2') setS2(copy); else if(key==='3') setS3(copy); else setS4(copy)}} placeholder="0" inputMode="decimal" style={{width:64,border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,padding:'3px 6px',textAlign:'center',fontFamily:'monospace',fontSize:11}} />
-                      <span style={{fontSize:11,color:'var(--muted)'}}>kg</span>
+                    <div style={{display:'grid',gap:4}}>
+                      <button className='rx-iconbtn' onClick={()=>moveEx(key,dIdx,eIdx,-1)} disabled={eIdx===0} title="Subir" aria-label={`Subir ${ex.name}`}>↑</button>
+                      <button className='rx-iconbtn' onClick={()=>moveEx(key,dIdx,eIdx,1)} disabled={eIdx===day.exercises.length-1} title="Bajar" aria-label={`Bajar ${ex.name}`}>↓</button>
+                      <button className='rx-iconbtn' onClick={()=>dupEx(key,dIdx,eIdx)} title="Duplicar ejercicio" aria-label={`Duplicar ${ex.name}`}>⧉</button>
+                      <button className='rx-iconbtn danger' onClick={()=>removeEx(key,dIdx,eIdx)} title="Quitar ejercicio" aria-label={`Quitar ${ex.name}`}>×</button>
                     </div>
                   </div>
-                ))}
+                )})}
                 <div style={{display:'flex',gap:6,marginTop:6}}>
                   <div style={{flex:1,position:'relative'}}>
                     <span style={{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--muted)',fontSize:12,pointerEvents:'none'}}>🔍</span>
-                    <input placeholder="Elegir de la biblioteca..." value={openDrop===key+'-'+dIdx? qLib: ''} onFocus={()=>setOpenDrop(key+'-'+dIdx)} onBlur={()=>setTimeout(()=>setOpenDrop(null),180)} onChange={e=>{ setQLib(e.target.value); setOpenDrop(key+'-'+dIdx) }} style={{width:'100%',padding:'6px 8px 6px 28px',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,outline:'none',fontSize:12}} />
+                    <input placeholder="Elegir de la biblioteca... (Enter agrega el primero)" value={openDrop===key+'-'+dIdx? qLib: ''} onFocus={()=>setOpenDrop(key+'-'+dIdx)} onBlur={()=>setTimeout(()=>setOpenDrop(null),180)} onChange={e=>{ setQLib(e.target.value); setOpenDrop(key+'-'+dIdx) }} onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); const first=(qLib?filteredOpts:opts)[0]; if(first){ addEx(key,dIdx,first.name); setQLib(''); setOpenDrop(null) } } }} style={{width:'100%',padding:'6px 8px 6px 28px',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:6,outline:'none',fontSize:12}} />
                     {openDrop===key+'-'+dIdx && (
                       <div style={{position:'absolute',top:'100%',left:0,right:0,marginTop:4,maxHeight:180,overflow:'auto',background:'var(--card)',border:'1px solid var(--card-border)',borderRadius:8,boxShadow:'0 10px 24px rgba(0,0,0,.35)',zIndex:20}}>
                         {(qLib? filteredOpts : opts).slice(0,30).map(o=>(

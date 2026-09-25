@@ -27,13 +27,16 @@ export default function VistaLicencias(){
     return {total:rows.length, activas, vencidas, porVencer, mrr}
   },[all])
   const filtradas=all.filter(r=>{ const hay=''+(r.gym_name||r.cliente||'')+' '+(r.hwid||'')+' '+(r.email||''); if(!q.trim()) return true; return hay.toLowerCase().includes(q.trim().toLowerCase()) })
-  if(loading) return <section className="panel"><PanelTitle title="Panel de Ventas"/><p className="copy">Cargando estadísticas y licencias...</p></section>
+  if(loading) return <section className="panel"><PanelTitle title="Licencias"/><p className="copy">Cargando estadísticas y licencias...</p></section>
   const activo=lic?.activo; const dias=lic?.dias_restantes??0; const vence=lic?.vence? toDisplay(lic.vence):'—'
   return <div style={{display:'grid',gap:14}}>
-    <section className="panel"><PanelTitle title="Licencia por Gimnasio — Multi-PC"/><p className="copy">Un gimnasio = una licencia <code>HWID</code> compartida. Todas las PCs con el mismo <b>Código de Gimnasio</b> comparten vencimiento y control. Más control que por usuario.</p>
+    <div className="page-head" style={{marginBottom:0}}>
+      <div><h2>Licencias</h2><p>Gestioná las licencias de tus gimnasios</p></div>
+    </div>
+    <section className="panel"><PanelTitle title="Mi licencia — Multi-PC"/><p className="copy">Un gimnasio = una licencia <code>HWID</code> compartida. Todas las PCs con el mismo <b>Código de Gimnasio</b> comparten vencimiento y control.</p>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:14}}>
         <div style={{background: activo?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)',border:`1px solid ${activo?'var(--success)':'var(--danger)'}`,borderRadius:12,padding:14}}>
-          <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700}}>{activo?'🟢 ACTIVA':'🔴 VENCIDA'}</div>
+          <div><span className={activo?'badge':'badge vencido'}>{activo?'Activa':'Vencida'}</span></div>
           <div style={{fontWeight:900,marginTop:4}}>Gym {lic?.gym_name||hwid.slice(-4)} · {hwid}</div>
           <div style={{fontSize:12,marginTop:4}}><b>Vence:</b> {vence} · <b>Quedan:</b> {dias} días</div>
           <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>PCs activas: {lic?.pcs||1} · HWID: {lic?.hwid||hwid}</div>
@@ -54,15 +57,17 @@ export default function VistaLicencias(){
       <div style={{fontSize:11,color:'var(--muted)',marginTop:8}}>Verificación automática cada 5 min como el desktop <code>verificar_licencia_bloqueante</code>. Si vence, todas las PCs del gym se bloquean.</div>
     </section>
     <section className="panel">
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}><PanelTitle title="Panel de Ventas — Multi-Gym"/><button className="ghost" onClick={fetchLic}>↻ Actualizar</button></div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}><PanelTitle title="Licencias — Multi-Gym"/><button className="ghost" onClick={fetchLic}>↻ Actualizar</button></div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginTop:12}}>
         <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Gyms</span><strong>{stats.total}</strong><small>licencias</small></div>
         <div className="stat green"><div className="stat-icon" aria-hidden="true">🟢</div><span>Activas</span><strong>{stats.activas}</strong><small>al día</small></div>
         <div className="stat orange"><div className="stat-icon" aria-hidden="true">⏳</div><span>Por vencer ≤7d</span><strong>{stats.porVencer}</strong><small>renovar ahora</small></div>
-        <div className="stat" style={{background:'rgba(239,68,68,.08)',border:'1px solid var(--danger)',color:'var(--danger)'}}><div className="stat-icon" aria-hidden="true">🔴</div><span>Vencidas</span><strong>{stats.vencidas}</strong><small>posibles bajas</small></div>
+        <div className="stat pink"><div className="stat-icon" aria-hidden="true">🔴</div><span>Vencidas</span><strong>{stats.vencidas}</strong><small>posibles bajas</small></div>
         <div className="stat purple"><div className="stat-icon" aria-hidden="true">💰</div><span>MRR estimado</span><strong>{money(stats.mrr)}</strong><small>por mes activo</small></div>
       </div>
-      <div style={{display:'flex',gap:8,margin:'14px 0 0'}}><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar por gym, código (HWID) o email..." aria-label="Buscar licencias" className="field" style={{flex:1}}/></div>
+      <div className="toolbar">
+        <div className="search-wrap"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔎 Buscar por gym, código (HWID) o email..." aria-label="Buscar licencias" className="field-search"/></div>
+      </div>
       <p style={{fontSize:12,color:'var(--muted)',margin:'10px 0'}}>Solo <code>admin Dueño</code>. Cada fila = un gym con su <code>HWID</code> compartido multi-PC. Renová, bloqueá, desbloqueá o eliminá desde acá.</p>
       <TodasLicenciasTable rows={filtradas} onChange={fetchLic} />
       <div style={{marginTop:14,padding:12,background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:10}}>
@@ -86,7 +91,7 @@ function TodasLicenciasTable({rows=[],onChange}){
       const vence=l.vence||l.fecha_expiracion||''; const dias=vence? Math.ceil((new Date(vence)-new Date())/86400000): -999
       const estado=String(l.estado||'').toLowerCase(); const activo=l.activo!==undefined? !!l.activo : estado==='activa'
       const isAct=activo && dias>=0
-      const chip=estado==='bloqueada'?['Bloqueada','var(--danger)']:(!isAct?['Vencida','var(--danger)']:(dias<=7?[`Por vencer ${dias}d`,'var(--warning)']:['Activa','var(--success)']))
+      const chip=estado==='bloqueada'?['Bloqueada','vencido']:(!isAct?['Vencida','vencido']:(dias<=7?[`Por vencer ${dias}d`,'warn']:['Activa','']))
       return <div key={l.hwid} style={{display:'grid',gridTemplateColumns:'1.1fr 1.2fr 1.7fr 85px 90px 105px 115px 220px',gap:0,padding:'10px 8px',borderTop:'1px solid var(--card-border)',fontSize:12,background:isAct?'transparent':'rgba(239,68,68,.04)',alignItems:'center'}}>
         <span><b>{l.gym_name||l.cliente||'—'}</b></span>
         <span style={{fontSize:11,color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.email||'—'}</span>
@@ -94,7 +99,7 @@ function TodasLicenciasTable({rows=[],onChange}){
         <span style={{textTransform:'capitalize',fontSize:11}}>{String(l.tipo||'mensual')}</span>
         <span>{Number(l.precio||0)? money(l.precio):'—'}</span>
         <span>{vence? toDisplay(vence):'—'}</span>
-        <span><span style={{background:chip[1]+'1e',color:chip[1],padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:800,whiteSpace:'nowrap'}}>{chip[0]}</span></span>
+        <span><span className={`badge ${chip[1]}`}>{chip[0]}</span></span>
         <span style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
           <button className="ghost sm success" onClick={()=>renovar(l,1)}>+1m</button>
           <button className="ghost sm success" onClick={()=>renovar(l,3)}>+3m</button>

@@ -20,22 +20,23 @@ function ClockCalendar(){
 export default function VistaInicio({stats,clases,usuario,onNavigate}){
   const goKey=(e,id)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); onNavigate(id) } }
   return <>
-    <section className="hero"><div><span className="eyebrow">ATLOS · CONTROL TOTAL</span><h2>Bienvenido/a, <em>{usuario}</em></h2><p>Gestión de Gimnasios ATLOS</p></div><img src="/logo.png" alt="" width="256" height="175" className="hero-badge-img" onError={e=>e.currentTarget.style.display='none'}/></section>
+    <section className="hero"><div><span className="eyebrow">ATLOS · Panel principal</span><h2>Hola, <em>{usuario}</em></h2><p>Así está tu gimnasio hoy: alumnos, asistencia, ingresos y actividad reciente en un solo lugar.</p></div><img src="/logo.png" alt="ATLOS" width="256" height="175" className="hero-badge-img" onError={e=>e.currentTarget.style.display='none'}/></section>
     <div className="cards">
-      <div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos</span><strong>{stats.total}</strong><small>{stats.conRutina} con rutina</small></div>
-      <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Asist. hoy</span><strong>{stats.today}</strong><small>Presentes</small></div>
-      <div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>Ingresos mes</span><strong>{money(stats.revenue)}</strong><small>{stats.totalPagos} pagos</small></div>
-      <div className="stat purple"><div className="stat-icon" aria-hidden="true">📋</div><span>Ejercicios</span><strong>{stats.totalEj}</strong><small>Cargados</small></div>
+      <div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos activos</span><strong>{stats.total}</strong><small>{stats.conRutina} con rutina</small></div>
+      <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Asistencia hoy</span><strong>{stats.today}</strong><small>Presentes</small></div>
+      <div className="stat accent"><div className="stat-icon" aria-hidden="true">$</div><span>Ingresos del mes</span><strong>{money(stats.revenue)}</strong><small>{stats.totalPagos} pagos</small></div>
+      <div className="stat purple"><div className="stat-icon" aria-hidden="true">📋</div><span>Ejercicios</span><strong>{stats.totalEj}</strong><small>En biblioteca</small></div>
     </div>
     <div className="grid2">
       <div style={{display:'grid',gap:16}}>
         <ClockCalendar/>
-        <div className="quick-grid">
-          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('planificacion')} onKeyDown={e=>goKey(e,'planificacion')}><i>👥</i><b>Alumnos</b></div>
-          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('asistencia')} onKeyDown={e=>goKey(e,'asistencia')}><i>✓</i><b>Asistencia</b></div>
-          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('gestion')} onKeyDown={e=>goKey(e,'gestion')}><i>💳</i><b>Gestión</b></div>
-          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('planes')} onKeyDown={e=>goKey(e,'planes')}><i>🏋</i><b>Planes</b></div>
-        </div>
+        <section className="panel"><PanelTitle title="Acciones rápidas"/>
+        <div className="quick-grid" style={{marginTop:0}}>
+          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('planificacion')} onKeyDown={e=>goKey(e,'planificacion')}><i>👥</i><b>Alumnos</b><small>Ver y agregar</small></div>
+          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('asistencia')} onKeyDown={e=>goKey(e,'asistencia')}><i>✓</i><b>Asistencia</b><small>Check-in del día</small></div>
+          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('gestion')} onKeyDown={e=>goKey(e,'gestion')}><i>💳</i><b>Pagos</b><small>Registrar cobro</small></div>
+          <div className="quick-card" role="button" tabIndex={0} onClick={()=>onNavigate('planes')} onKeyDown={e=>goKey(e,'planes')}><i>🏋</i><b>Rutinas</b><small>Rutinas y ejercicios</small></div>
+        </div></section>
       </div>
       <section className="panel"><PanelTitle title="Clases del día"/><div className="rows">{clases.length?clases.slice(0,6).map(c=><div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre||c.name}</b><span>{c.dia_mes||c.dia} · {c.hora_inicio||c.inicio}–{c.hora_fin||c.fin} {c.profesor?`· ${c.profesor}`:''}</span></div><span className="badge">{c.capacidad||'-'} cap</span></div>):<Empty text="No hay clases cargadas. Creá una en Clases."/>}</div></section>
     </div>

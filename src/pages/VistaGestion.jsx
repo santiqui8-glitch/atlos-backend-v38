@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationId } from '../services/api'
 import { pushDeletedId } from '../services/tenant'
 import { put, remove } from '../services/db'
-import { money, toISO, toDisplay, onEnterNext, isSameMonth, today } from '../utils/helpers.js'
+import { money, toISO, toDisplay, onEnterNext, isSameMonth, today, parseFecha } from '../utils/helpers.js'
 import { Empty } from '../components/ui.jsx'
 
 
@@ -11,8 +11,18 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null) // pago a editar
   const [visibles,setVisibles]=useState(PAGE_SIZE) // V43-04: lista larga paginada local
+  const [q,setQ]=useState('') // V44-D-10: filtro local (no toca datos ni API)
   const selected=payments.find(p=>String(p.id)===String(sel))
   const totalMes=payments.filter(p=>isSameMonth(p.date, today())).reduce((a,b)=>a+Number(b.amount||0),0)
+  const qn=q.trim().toLowerCase();
+  const filtrados=!qn?payments:payments.filter(p=>{ const s=students.find(x=>String(x.id)===String(p.studentId)); const hay=`${s?.name||p.alumnoNombre||''} ${p.note||''} ${p.metodo||''} ${p.amount||''} ${toDisplay(p.date)||''}`.toLowerCase(); return hay.includes(qn) })
+  // V44-D-10: estado del alumno seleccionado (misma regla +30 días ya usada en notifs/ficha).
+  const selAlumno=selected?students.find(s=>String(s.id)===String(selected.studentId)):null;
+  const selPagos=selAlumno?payments.filter(p=>String(p.studentId)===String(selAlumno.id)):[];
+  const selUltimo=selPagos.slice().sort((a,b)=>(parseFecha(b.date)||new Date(0))-(parseFecha(a.date)||new Date(0)))[0];
+  const selVenc=(()=>{ if(!selUltimo) return null; const pd=parseFecha(selUltimo.date); if(!pd) return null; const v=new Date(pd); v.setDate(v.getDate()+30); return v })();
+  const selDiff=selVenc?Math.ceil((selVenc-new Date(new Date().setHours(0,0,0,0)))/86400000):null;
+  const selEstado=!selAlumno?null:!selUltimo?{label:'Sin pagos',cls:'neutral'}:selDiff<0?{label:'Vencido',cls:'vencido'}:selDiff<=5?{label:`Por vencer (${selDiff}d)`,cls:'warn'}:{label:`Al día (${selDiff}d)`,cls:''};
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná un pago de la lista.')
     if(!confirm(`¿Eliminar pago ID #${selected.id} de ${selected.alumnoNombre||students.find(s=>String(s.id)===String(selected.studentId))?.name||'—'}?`)) return
@@ -70,31 +80,34 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
     setEdit(null); setSel(null); refresh()
   }
   return <section className="panel">
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
-      <h3 style={{margin:0,fontSize:14}}>Gestión</h3>
-      <div style={{display:'flex',gap:8}}>
-        <button className="primary" onClick={onNew}>+ REGISTRAR PAGO</button>
-        {rol!=='Empleado'&&<><button className="ghost" onClick={handleEdit}>EDITAR</button><button className="ghost danger" onClick={handleDelete}>ELIMINAR</button></>}
+    <div className="page-head">
+      <div><h2>Pagos</h2><p>Gestioná pagos y vencimientos · {payments.length} pagos registrados</p></div>
+      <div className="page-actions">
+        <button className="primary" onClick={onNew}>+ Registrar pago</button>
+        {rol!=='Empleado'&&<><button className="ghost" onClick={handleEdit}>Editar</button><button className="ghost danger" onClick={handleDelete}>Eliminar</button></>}
       </div>
     </div>
     <div className="cards" style={{marginTop:14,gridTemplateColumns:rol==='Empleado'?'1fr 1fr':'repeat(3,1fr)'}}>
-      {rol!=='Empleado'&&<div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>INGRESOS</span><strong>{money(totalMes)}</strong></div>}
-      <div className="stat green"><div className="stat-icon" aria-hidden="true">🧾</div><span>PAGOS</span><strong>{payments.length}</strong></div>
-      <div className="stat blue"><div className="stat-icon" aria-hidden="true">✓</div><span>ALUMNOS AL DÍA</span><strong>{stats.alumnosAlDia}</strong></div>
+      {rol!=='Empleado'&&<div className="stat accent"><div className="stat-icon" aria-hidden="true">$</div><span>Ingresos</span><strong>{money(totalMes)}</strong></div>}
+      <div className="stat green"><div className="stat-icon" aria-hidden="true">🧾</div><span>Pagos</span><strong>{payments.length}</strong></div>
+      <div className="stat blue"><div className="stat-icon" aria-hidden="true">✓</div><span>Alumnos al día</span><strong>{stats.alumnosAlDia}</strong></div>
     </div>
-    <div className="table" style={{marginTop:14,border:'1px solid var(--card-border)',borderRadius:12,overflow:'hidden'}}>
+    <div className="toolbar">
+      <div className="search-wrap"><input className="field-search" aria-label="Buscar pago" placeholder="🔎 Buscar alumno por nombre, concepto o método..." value={q} onChange={e=>{setQ(e.target.value); setVisibles(PAGE_SIZE)}}/></div>
+    </div>
+    <div className="table" style={{marginTop:0,overflow:'hidden'}}>
       <div className="thead gestion"><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>
       <div style={{maxHeight:420,overflow:'auto'}}>
-        {payments.slice().reverse().slice(0,visibles).map(p=>{
+        {filtrados.slice().reverse().slice(0,visibles).map(p=>{
           const s=students.find(x=>String(x.id)===String(p.studentId))
           const isSel=String(sel)===String(p.id)
           return <div key={p.id} onClick={()=>setSel(p.id)} className={isSel?'trow sel gestion':'trow gestion'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(p.id)}}}>
             <span style={{fontFamily:'monospace'}} className="muted-text">{String(p.id).slice(0,6)}</span><span style={{fontSize:12}}>{toDisplay(p.date)}</span><span><b>{p.alumnoNombre||s?.name||'—'}</b></span><span>{p.note||'Cuota Mensual'}</span><span className="num" style={{fontWeight:700}}>{money(p.amount)}</span><span>{p.metodo||'Efectivo'}</span>
           </div>
         })}
-        {!payments.length&&<Empty text="No hay pagos. Registrá el primero."/>}
-        {visibles<payments.length&&<button className="ghost" style={{marginTop:10,width:'100%'}} onClick={()=>setVisibles(v=>v+PAGE_SIZE)}>Ver más ({payments.length-visibles} restantes)</button>}
-        {selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',borderTop:'1px solid var(--card-border)',background:'var(--selected)'}}>Seleccionado: ID #{String(selected.id).slice(0,6)} · Click en otro para cambiar · Doble click afuera deselecciona</div>}
+        {!filtrados.length&&<Empty text={q?"Sin resultados para la búsqueda.":"No hay pagos. Registrá el primero."}/>}
+        {visibles<filtrados.length&&<button className="ghost" style={{marginTop:10,width:'100%'}} onClick={()=>setVisibles(v=>v+PAGE_SIZE)}>Ver más ({filtrados.length-visibles} restantes)</button>}
+        {selected&&<div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'10px 12px',fontSize:12,borderTop:'1px solid var(--card-border)',background:'var(--selected)'}}><b>{selAlumno?.name||selected.alumnoNombre||'—'}</b>{selEstado&&<span className={`badge ${selEstado.cls}`}>{selEstado.label}</span>}<span className="muted-text">Último pago: {selUltimo?`${toDisplay(selUltimo.date)} · ${money(selUltimo.amount)}`:'—'}{selVenc?` · Vence ${toDisplay(selVenc.toISOString().slice(0,10))}`:''}</span><button className="primary small" style={{marginLeft:'auto'}} onClick={onNew}>+ Registrar pago</button></div>}
       </div>
     </div>
     {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Pago</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
@@ -104,7 +117,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
         <label>Concepto<select name="concepto" defaultValue={edit.note||'Cuota Mensual'}><option>Cuota Mensual</option><option>Matricula</option><option>Pase Libre</option><option>Personalizado</option></select></label>
         <label>Medio de Pago<select name="metodo" defaultValue={edit.metodo||'Efectivo'}><option>Efectivo</option><option>Transferencia</option><option>Debito</option><option>Credito</option></select></label>
         <label>Fecha (DD/MM/AAAA)<input name="fecha" defaultValue={edit.date} placeholder="DD/MM/AAAA" required/></label>
-        <button className="primary wide">GUARDAR CAMBIOS</button>
+        <button className="primary wide">Guardar cambios</button>
       </form>
     </div></div>}
   </section>

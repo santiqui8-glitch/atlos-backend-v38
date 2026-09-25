@@ -17,9 +17,12 @@ export default function VistaReportes({payments,students,clases,ejercicios,atten
   const chartMetodo=Object.entries(porMetodo).map(([name,value])=>({name,value}))
   const COLORS=['var(--accent)','var(--success)','var(--warning)','var(--danger)','var(--info)','var(--accent-cyan)']
   return <div style={{display:'grid',gap:16}}>
-    <div className="panel"><h3 style={{margin:0,color:'var(--accent)',letterSpacing:'.12em'}}>RESUMEN GENERAL</h3><div className="cards">
+    <div className="page-head" style={{marginBottom:0}}>
+      <div><h2>Reportes</h2><p>Visualizá la actividad de tu gimnasio</p></div>
+    </div>
+    <div className="panel"><PanelTitle title="Resumen general"/><div className="cards" style={{gridTemplateColumns:'repeat(5,1fr)'}}>
       <div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos</span><strong>{totalAlumnos}</strong></div>
-      <div className="stat orange"><div className="stat-icon" aria-hidden="true">$</div><span>Total pagos</span><strong>{money(totalPagos)}</strong></div>
+      <div className="stat accent"><div className="stat-icon" aria-hidden="true">$</div><span>Total pagos</span><strong>{money(totalPagos)}</strong></div>
       <div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Ejercicios</span><strong>{ejercicios.length}</strong></div>
       <div className="stat pink"><div className="stat-icon" aria-hidden="true">✓</div><span>Presentes hoy</span><strong>{presentesHoy}</strong></div>
       <div className="stat purple"><div className="stat-icon" aria-hidden="true">🗓</div><span>Clases</span><strong>{clases.length}</strong></div>
@@ -34,7 +37,7 @@ export default function VistaReportes({payments,students,clases,ejercicios,atten
     </div>
     <div className="grid2">
       <section className="panel"><PanelTitle title="Alumnos recientes"/><div className="rows">{recientes.map(s=><div className="row" key={s.id}><div className="miniavatar">{s.name[0]}</div><div className="grow"><b>{s.name}</b><span>{s.joinedAt}</span></div></div>)}</div></section>
-      <section className="panel"><PanelTitle title="Clases populares"/><div className="rows">{clases.slice(0,5).map(c=><div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre||c.name}</b><span>{c.profesor||'—'}</span></div></div>)}{!clases.length&&<Empty text="Sin clases"/>}</div></section>
+      <section className="panel"><PanelTitle title="Clases"/><div className="rows">{clases.slice(0,5).map(c=><div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre||c.name}</b><span>{c.profesor||'—'}</span></div></div>)}{!clases.length&&<Empty text="Sin clases"/>}</div></section>
     </div>
   </div>
 }
