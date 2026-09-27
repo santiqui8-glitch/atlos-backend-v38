@@ -150,12 +150,15 @@ export const api={
   usuarios:()=>request('/usuarios').catch(()=> Promise.resolve(JSON.parse(localStorage.getItem('atlos-usuarios')||'[{"id":1,"usuario":"admin","rol":"Dueño"}]'))),
   crearUsuario:(data,opts)=>request('/usuarios',{method:'POST',body:data,...(opts||{})}).catch(()=>{ const arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); const n={id:Date.now(),...data}; arr.push(n); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return n; }),
   eliminarUsuario:(id,opts)=>request(`/usuarios/${id}`,{method:'DELETE',...(opts||{})}).catch(()=>{ let arr=JSON.parse(localStorage.getItem('atlos-usuarios')||'[]'); arr=arr.filter(u=>String(u.id)!==String(id)); localStorage.setItem('atlos-usuarios',JSON.stringify(arr)); return {ok:true}; }),
+  // V44-I: cambio de clave propio (endpoint existente POST /auth/cambiar-clave).
+  cambiarClave:(actual,nueva)=>request('/auth/cambiar-clave',{method:'POST',body:{clave_actual:actual,clave_nueva:nueva}}),
 };
 
 export function setToken(t){ if(t) localStorage.setItem('atlos-token',t); else localStorage.removeItem('atlos-token'); }
 export function clearAuth(){ localStorage.removeItem('atlos-token'); localStorage.removeItem('atlos-session'); localStorage.removeItem('atlos-rol'); localStorage.removeItem('atlos-usuario'); try{ localStorage.removeItem('atlos-sid') }catch{} }
 export function isTokenValid(){ try{ const tok=getToken(); if(!tok) return false; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return false; return true }catch{ return false } }
 export function getRole(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.rol||p.role||null; }catch{ return null } }
+export function getUserId(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.user_id??p.usuario_id??p.sub??null }catch{ return null } }
 // BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
 let flushing=false;
 let pushDuringFlush=false;

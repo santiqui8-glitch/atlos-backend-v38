@@ -181,6 +181,10 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
             ? <div style={{display:'grid',gap:6,fontSize:12}}><div><b>Plan:</b> {em.planNombre||'—'}{em.precio!=null?` · ${money(em.precio)}`:''}</div><div><b>Inicio:</b> {em.inicio?toDisplay(em.inicio):'—'}</div><div><b>Vencimiento:</b> {em.vencimiento?toDisplay(em.vencimiento):'—'}</div></div>
             : <div style={{fontSize:12,color:'var(--muted)'}}>Sin membresía — se usa último pago + 30 días.<br/>El flujo completo de planes llega en E-09.</div>}
         </div>
+        {(()=>{ const hist=membresias.filter(m=>String(m.alumno_id)===String(detail.id)).slice().sort((a,b)=>String(b.fecha_vencimiento||'')>String(a.fecha_vencimiento||'')?1:-1); if(!hist.length) return null; return <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12,marginBottom:12}}>
+          <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>HISTORIAL DE MEMBRESÍAS</div>
+          {hist.map(m=>{ const pl=planes.find(p=>String(p.id)===String(m.plan_id)); return <div key={m.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'6px 0',borderBottom:'1px solid var(--card-border)',fontSize:12}}><span>{pl?.nombre||'Plan'} · {m.fecha_inicio?toDisplay(m.fecha_inicio):'—'} → {m.fecha_vencimiento?toDisplay(m.fecha_vencimiento):'—'}</span><span className={m.estado==='vigente'?'badge':m.estado==='cancelada'?'badge neutral':'badge vencido'}>{m.estado==='vigente'?'Vigente':m.estado==='cancelada'?'Cancelada':'Vencida'}</span></div> })}
+        </div> })()}
         <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12,marginBottom:12}}>
           <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>HISTORIAL DE PAGOS</div>
           {pagosAlum.length? pagosAlum.slice(-5).reverse().map(p=><div key={p.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid var(--card-border)',fontSize:12}}><span>{toDisplay(p.date)} · {p.note||'Cuota'}</span><span style={{fontWeight:700}}>{money(p.amount)}</span></div>) : <div style={{fontSize:12,color:'var(--muted)'}}>Sin pagos registrados</div>}
@@ -204,6 +208,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button className="primary" onClick={()=>{ setDetail(null); if(onRenew) onRenew(detail); else { setEdit(detail) } }} style={{flex:1}}>Renovar cuota</button>
+          <button className="ghost" title="Abrir cobro para elegir otro plan (el backend cierra la anterior)" onClick={()=>{ setDetail(null); if(onRenew) onRenew(detail); else { setEdit(detail) } }}>Cambiar plan</button>
           <button className="ghost" onClick={()=>{setDetail(null); setEdit(detail)}}>Editar</button>
           <button className="ghost" onClick={()=>setDetail(null)}>Cerrar</button>
         </div>

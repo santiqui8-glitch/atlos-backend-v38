@@ -25,6 +25,7 @@ const VistaAcceso = lazy(() => import('./pages/VistaAcceso.jsx'))
 const VistaComercial = lazy(() => import('./pages/VistaComercial.jsx'))
 const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
 const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
+const VistaPortal = lazy(() => import('./pages/VistaPortal.jsx'))
 
 // DEV PREVIEW ONLY — never active outside Vite development mode.
 // Bypass VISUAL del overlay de licencia vencida, solo para revisar el
@@ -393,6 +394,11 @@ export default function App(){
     const gymHwid=getGymHWID();
     if(!gymHwid) return <>{previewBtn}<GymGate onOk={force}/></>;
     return <>{previewBtn}<Login onChangeGym={force} onLogin={async (u,p)=>{ try{ const r=await api.login(u,p); if(!r || (!r.token && !r.access_token)) return 'Respuesta inválida del servidor'; const tok=r.token||r.access_token; setToken(tok); const r2=await api.me().catch(()=>null); const rolResp=r2?.rol||r.rol||r.role||getRole()||'Dueño'; const usu=r2?.usuario||r.usuario||r.nombre||r.user||u; localStorage.setItem('atlos-session','1'); localStorage.setItem('atlos-usuario',usu); localStorage.setItem('atlos-rol',rolResp); setUsuario(usu); setRol(rolResp); startSession(); adoptOwnQueueItems(); setLogged(true); return null; }catch(e){ return e.message } }}/></>
+  }
+  // V44-I: portal del alumno (rol Alumno). Shell separado: sin nav admin,
+  // sin datos ajenos (el backend ya devuelve scope propio por JWT).
+  if(rol==='Alumno'&&!preview){
+    return <main className="main portal-main"><Suspense fallback={<div style={{padding:20,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando portal...</div>}><VistaPortal usuario={usuario} students={students} payments={payments} membresias={membresias} planes={planes} attendance={attendance} clases={clases} routines={routines} online={online} onLogout={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setPreview(false); setUsuario('admin'); setRol('Dueño')}}/></Suspense></main>
   }
 
   return <div className="app">

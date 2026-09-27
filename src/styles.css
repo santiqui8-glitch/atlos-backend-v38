@@ -287,6 +287,17 @@ textarea.field{height:auto;min-height:74px;resize:vertical}
 .tab.active{background:rgba(27,150,236,.1);color:var(--accent-active);font-weight:800;border-bottom-color:var(--accent)}
 /* Avatar */
 .avatar{width:32px;height:32px;border-radius:9px;background:var(--selected);color:var(--accent-active);display:grid;place-items:center;font-weight:800;font-size:11px;flex:none}
+/* V44-I: portal del alumno (mobile-first, una columna, reutiliza sistema). */
+.portal-main{max-width:720px;margin-left:auto;margin-right:auto}
+.portal-wrap{display:grid;gap:12px}
+.portal-hero{display:flex;align-items:center;gap:12px;background:linear-gradient(120deg,var(--accent),var(--accent-active));border-radius:var(--radius-lg);padding:16px;color:#fff;box-shadow:var(--shadow-card)}
+.portal-hero h2{margin:2px 0 6px;font-size:20px;color:#fff}
+.portal-hero .muted-text{color:rgba(255,255,255,.8)}
+.portal-hero .badge{background:rgba(255,255,255,.2);color:#fff}
+.portal-hero .ghost.sm{border-color:rgba(255,255,255,.4);color:#fff;margin-left:auto}
+.portal-logo{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.15);object-fit:contain;flex:none}
+.portal-aviso{border:1px solid var(--warning);background:rgba(178,106,0,.1);color:var(--text);border-radius:var(--radius-md);padding:10px 14px;font-size:13px;font-weight:600}
+.portal-wrap .tabs{flex-wrap:wrap;row-gap:6px}
 /* V44-D-06: terminal de asistencia — full-bleed dentro del main + 2 columnas. */
 .kiosk-bleed{margin:-26px -28px -56px;padding:26px 28px 40px;min-height:calc(100vh - 60px);background:transparent}
 .cols-main-side{display:grid;grid-template-columns:1.65fr 1fr;gap:14px;align-items:start}
