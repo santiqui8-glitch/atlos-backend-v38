@@ -20,6 +20,7 @@ import VistaProfesores from './pages/VistaProfesores.jsx'
 // El fallback de Suspense es intencionalmente simple.
 const VistaReportes = lazy(() => import('./pages/VistaReportes.jsx'))
 const VistaPlanes = lazy(() => import('./pages/VistaPlanes.jsx'))
+const VistaCaja = lazy(() => import('./pages/VistaCaja.jsx'))
 const VistaComercial = lazy(() => import('./pages/VistaComercial.jsx'))
 const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
 const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
@@ -72,6 +73,7 @@ export default function App(){
   const navBase=[
     ['inicio','⌂','Dashboard'],
     ['gestion','💳','Pagos'],
+    ['caja','🧾','Caja'],
     ['reportes','📊','Reportes'],
     ['planificacion','👥','Alumnos'],
     ['asistencia','✓','Asistencia'],
@@ -81,10 +83,10 @@ export default function App(){
     ['personal','👤','Personal'],
     ['comercial','🏷','Planes'],
   ]
-  let nav=rol==='Empleado' ? navBase.filter(([k])=>!['personal','reportes'].includes(k)) : [...navBase]
+  let nav=rol==='Empleado' ? navBase.filter(([k])=>!['personal','reportes','caja'].includes(k)) : [...navBase]
   if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Licencias']]
   // DEV PREVIEW ONLY — permisos mínimos de navegación visual: sin personal ni licencias.
-  if(preview) nav=nav.filter(([k])=>!['personal','licencias','comercial'].includes(k))
+  if(preview) nav=nav.filter(([k])=>!['personal','licencias','comercial','caja'].includes(k))
 
   const refresh=async()=>{
     // V39-11B: sin solapamientos + snapshot de tenant ANTES de la primera
@@ -417,6 +419,7 @@ export default function App(){
       <Suspense fallback={<div style={{padding:20,minHeight:400,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} planes={planes} membresias={membresias} onNew={()=>setModal('payment')} refresh={refresh}/>}
+      {page==='caja'&&<VistaCaja rol={rol}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
       {page==='planificacion'&&<VistaPlanificacion students={filtered} query={query} setQuery={setQuery} stats={stats} payments={payments} attendance={attendance} routines={routines} planes={planes} membresias={membresias} onNew={()=>setModal('student')} onRenew={(alumno)=>{ setRenewAlumno(String(alumno.id)); setModal('payment') }} refresh={refresh}/>}
       {page==='asistencia'&&<VistaAsistencia students={students} attendance={attendance} payments={payments} membresias={membresias} query={query} setQuery={setQuery} onCheckin={markAttendanceDNI} refresh={refresh}/>}

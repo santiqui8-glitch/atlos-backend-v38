@@ -102,6 +102,12 @@ export const api={
   claseAlumnos:(id)=>request(`/clases/${id}/alumnos`),
   inscribirClase:(clase_id,alumno_id,opts)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id},...(opts||{})}),
   cuotas:(params)=>request('/cuotas'+(params?`?${new URLSearchParams(params)}`:'')),
+  // V44-G: caja (mismo patron: opts acarrea operationId).
+  movimientos:(params)=>request('/movimientos'+(params?`?${new URLSearchParams(params)}`:'')),
+  crearMovimiento:(data,opts)=>request('/movimientos',{method:'POST',body:data,...(opts||{})}),
+  actualizarMovimiento:(id,data,opts)=>request(`/movimientos/${id}`,{method:'PUT',body:data,...(opts||{})}),
+  cierres:(params)=>request('/cierres'+(params?`?${new URLSearchParams(params)}`:'')),
+  crearCierre:(data,opts)=>request('/cierres',{method:'POST',body:data,...(opts||{})}),
   // V44-E: planes y membresias (mismo patron: opts acarrea operationId).
   planes:(params)=>request('/planes'+(params?`?${new URLSearchParams(params)}`:'')),
   crearPlan:(data,opts)=>request('/planes',{method:'POST',body:data,...(opts||{})}),
@@ -584,6 +590,10 @@ export async function flushQueue(){
         if(_localId&&_sid!=null){ membIdMap[String(_localId)]=String(_sid); remapPendingMembresia(own,_localId,_sid); }
       }
       else if(item.type==='updateMembresia'){ await api.actualizarMembresia(item.payload.id,{estado:item.payload.estado},{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      // V44-G: caja (mismo patron fire-and-drop; idempotencia por operationId).
+      else if(item.type==='movimiento'){ const movBody={...(item.payload||{})}; delete movBody._localId; await api.crearMovimiento(movBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='updateMovimiento'){ await api.actualizarMovimiento(item.payload.id,{categoria:item.payload.categoria,concepto:item.payload.concepto,observaciones:item.payload.observaciones},{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='cierre'){ const cierreBody={...(item.payload||{})}; delete cierreBody._localId; await api.crearCierre(cierreBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else remain.push(item);
     }catch(e){
       const _pl=item.payload||{};

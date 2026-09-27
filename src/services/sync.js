@@ -61,6 +61,9 @@ export function sanitizeQueue() {
     // V44-E: solo diagnostico (mismo nivel que el resto: warn + conteo).
     if (item.type === 'membresia' || item.type === 'updateMembresia') return hasBadId(pl.alumno_id)
     if (item.type === 'plan' || item.type === 'updatePlan') return !(pl.nombre && String(pl.nombre).trim())
+    // V44-G: solo diagnostico (warn + conteo, igual que el resto).
+    if (item.type === 'movimiento' || item.type === 'updateMovimiento') return !(pl.concepto && String(pl.concepto).trim())
+    if (item.type === 'cierre') return !(pl.fecha && String(pl.fecha).trim())
     return false
   }
   let flagged = 0
@@ -100,7 +103,7 @@ async function pullAll() {
   const ctxTenant=getCurrentTenant();
   const drifted=()=>getCurrentTenant()!==ctxTenant;
   const empty = []
-  const [students, payments, attendance, routines, clases, profesores, planes, membresias] = await Promise.all([
+  const [students, payments, attendance, routines, clases, profesores, planes, membresias, movs, cierres] = await Promise.all([
     api.alumnos().catch(() => empty),
     api.pagos().catch(() => empty),
     api.asistencia().catch(() => empty),
@@ -110,6 +113,9 @@ async function pullAll() {
     // V44-E: pull de planes/membresias (mismo patron; fallo aislado por endpoint).
     api.planes().catch(() => empty),
     api.membresias().catch(() => empty),
+    // V44-G: pull de caja (mismo patron; sin tombstones porque no hay borrado).
+    api.movimientos().catch(() => empty),
+    api.cierres().catch(() => empty),
   ])
   let extMap = {}
   try { extMap = tenantGetJSON('alumnos-ext',{}) } catch {}
@@ -220,6 +226,33 @@ async function pullAll() {
     precio_aplicado: m.precio_aplicado ?? 0,
   })) : []
   if (mRows.length && !drifted()) await bulkPut('membresias', mRows)
+  // V44-G: movimientos/cierres (nombres backend 1:1; sin borrado -> sin tombstones).
+  const mvRows = Array.isArray(movs) ? movs.map(m => ({
+    id: String(m.id),
+    tipo: m.tipo || '',
+    categoria: m.categoria || '',
+    concepto: m.concepto || '',
+    monto: m.monto ?? 0,
+    metodo: m.metodo || 'Efectivo',
+    fecha: String(m.fecha || '').slice(0, 10),
+    referencia_tipo: m.referencia_tipo ?? null,
+    referencia_id: m.referencia_id ?? null,
+    observaciones: m.observaciones || '',
+    estado: m.estado || 'activo',
+  })) : []
+  if (mvRows.length && !drifted()) await bulkPut('movimientos', mvRows)
+  const ciRows = Array.isArray(cierres) ? cierres.map(c => ({
+    id: String(c.id),
+    fecha: String(c.fecha || '').slice(0, 10),
+    total_ingresos: c.total_ingresos ?? 0,
+    total_egresos: c.total_egresos ?? 0,
+    saldo: c.saldo ?? 0,
+    efectivo_esperado: c.efectivo_esperado ?? null,
+    efectivo_declarado: c.efectivo_declarado ?? null,
+    diferencia: c.diferencia ?? null,
+    usuario: c.usuario || '',
+  })) : []
+  if (ciRows.length && !drifted()) await bulkPut('cierres', ciRows)
   if (!drifted() && extMap && typeof extMap === 'object') await put('meta', { id: 'alumnos-ext', value: extMap }).catch(() => {})
 }
 
