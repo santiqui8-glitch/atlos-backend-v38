@@ -21,6 +21,7 @@ import VistaProfesores from './pages/VistaProfesores.jsx'
 const VistaReportes = lazy(() => import('./pages/VistaReportes.jsx'))
 const VistaPlanes = lazy(() => import('./pages/VistaPlanes.jsx'))
 const VistaCaja = lazy(() => import('./pages/VistaCaja.jsx'))
+const VistaAcceso = lazy(() => import('./pages/VistaAcceso.jsx'))
 const VistaComercial = lazy(() => import('./pages/VistaComercial.jsx'))
 const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
 const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
@@ -77,6 +78,7 @@ export default function App(){
     ['reportes','📊','Reportes'],
     ['planificacion','👥','Alumnos'],
     ['asistencia','✓','Asistencia'],
+    ['acceso','🚪','Acceso'],
     ['turnos','🗓','Clases'],
     ['planes','🏋','Rutinas'],
     ['profesores','🎓','Profesores'],
@@ -86,7 +88,7 @@ export default function App(){
   let nav=rol==='Empleado' ? navBase.filter(([k])=>!['personal','reportes','caja'].includes(k)) : [...navBase]
   if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Licencias']]
   // DEV PREVIEW ONLY — permisos mínimos de navegación visual: sin personal ni licencias.
-  if(preview) nav=nav.filter(([k])=>!['personal','licencias','comercial','caja'].includes(k))
+  if(preview) nav=nav.filter(([k])=>!['personal','licencias','comercial','caja','acceso'].includes(k))
 
   const refresh=async()=>{
     // V39-11B: sin solapamientos + snapshot de tenant ANTES de la primera
@@ -423,6 +425,7 @@ export default function App(){
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
       {page==='planificacion'&&<VistaPlanificacion students={filtered} query={query} setQuery={setQuery} stats={stats} payments={payments} attendance={attendance} routines={routines} planes={planes} membresias={membresias} onNew={()=>setModal('student')} onRenew={(alumno)=>{ setRenewAlumno(String(alumno.id)); setModal('payment') }} refresh={refresh}/>}
       {page==='asistencia'&&<VistaAsistencia students={students} attendance={attendance} payments={payments} membresias={membresias} query={query} setQuery={setQuery} onCheckin={markAttendanceDNI} refresh={refresh}/>}
+      {page==='acceso'&&<VistaAcceso students={students} payments={payments} membresias={membresias} planes={planes}/>}
       {page==='turnos'&&<VistaClases clases={clases} students={students} profesores={profesores} onNew={()=>setModal('clase')} refresh={refresh}/>}
       {page==='planes'&&<VistaPlanes students={students} routines={routines} ejercicios={ejercicios} onNew={()=>setModal('routine')} refresh={refresh}/>}
       {page==='profesores'&&<VistaProfesores profesores={profesores} onNew={()=>setModal('profesor')} refresh={refresh}/>}

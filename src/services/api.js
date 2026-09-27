@@ -95,6 +95,10 @@ export const api={
   asistencia:(params)=>request('/asistencia'+(params?`?${new URLSearchParams(params)}`:'')),
   checkin:(alumno_id,opts)=>request('/asistencia/checkin',{method:'POST',body:{alumno_id},...(opts||{})}),
   checkout:(alumno_id,opts)=>request('/asistencia/checkout',{method:'POST',body:{alumno_id},...(opts||{})}),
+  // V44-H: accesos (terminal). Mismo patron: opts acarrea operationId.
+  accesos:(params)=>request('/accesos'+(params?`?${new URLSearchParams(params)}`:'')),
+  accesoEntrada:(data,opts)=>request('/accesos/entrada',{method:'POST',body:data,...(opts||{})}),
+  accesoSalida:(data,opts)=>request('/accesos/salida',{method:'POST',body:data,...(opts||{})}),
   clases:()=>request('/clases'),
   crearClase:(data,opts)=>request('/clases',{method:'POST',body:data,...(opts||{})}),
   actualizarClase:(id,data,opts)=>request(`/clases/${id}`,{method:'PUT',body:data,...(opts||{})}),
@@ -594,6 +598,10 @@ export async function flushQueue(){
       else if(item.type==='movimiento'){ const movBody={...(item.payload||{})}; delete movBody._localId; await api.crearMovimiento(movBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else if(item.type==='updateMovimiento'){ await api.actualizarMovimiento(item.payload.id,{categoria:item.payload.categoria,concepto:item.payload.concepto,observaciones:item.payload.observaciones},{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else if(item.type==='cierre'){ const cierreBody={...(item.payload||{})}; delete cierreBody._localId; await api.crearCierre(cierreBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      // V44-H: accesos (fire-and-drop; el servidor valida y registra incluso
+      // rechazos; idempotencia por operationId).
+      else if(item.type==='acceso-entrada'){ const {...ab}=(item.payload||{}); delete ab._localId; await api.accesoEntrada(ab,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='acceso-salida'){ const {...sb}=(item.payload||{}); delete sb._localId; await api.accesoSalida(sb,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else remain.push(item);
     }catch(e){
       const _pl=item.payload||{};

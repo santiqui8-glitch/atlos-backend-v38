@@ -64,6 +64,8 @@ export function sanitizeQueue() {
     // V44-G: solo diagnostico (warn + conteo, igual que el resto).
     if (item.type === 'movimiento' || item.type === 'updateMovimiento') return !(pl.concepto && String(pl.concepto).trim())
     if (item.type === 'cierre') return !(pl.fecha && String(pl.fecha).trim())
+    // V44-H: solo diagnostico (warn + conteo, igual que el resto).
+    if (item.type === 'acceso-entrada' || item.type === 'acceso-salida') return !(pl.alumno_id ?? pl.dni)
     return false
   }
   let flagged = 0
@@ -103,7 +105,7 @@ async function pullAll() {
   const ctxTenant=getCurrentTenant();
   const drifted=()=>getCurrentTenant()!==ctxTenant;
   const empty = []
-  const [students, payments, attendance, routines, clases, profesores, planes, membresias, movs, cierres] = await Promise.all([
+  const [students, payments, attendance, routines, clases, profesores, planes, membresias, movs, cierres, accs] = await Promise.all([
     api.alumnos().catch(() => empty),
     api.pagos().catch(() => empty),
     api.asistencia().catch(() => empty),
@@ -116,6 +118,8 @@ async function pullAll() {
     // V44-G: pull de caja (mismo patron; sin tombstones porque no hay borrado).
     api.movimientos().catch(() => empty),
     api.cierres().catch(() => empty),
+    // V44-H: pull de accesos (mismo patron; historial solo lectura).
+    api.accesos().catch(() => empty),
   ])
   let extMap = {}
   try { extMap = tenantGetJSON('alumnos-ext',{}) } catch {}
@@ -253,6 +257,21 @@ async function pullAll() {
     usuario: c.usuario || '',
   })) : []
   if (ciRows.length && !drifted()) await bulkPut('cierres', ciRows)
+  // V44-H: accesos (nombres backend 1:1; sin borrado -> sin tombstones).
+  const acRows = Array.isArray(accs) ? accs.map(a => ({
+    id: String(a.id),
+    alumno_id: a.alumno_id ?? null,
+    tipo: a.tipo || '',
+    resultado: a.resultado || '',
+    motivo: a.motivo || '',
+    metodo: a.metodo || 'manual',
+    identificador: a.identificador || '',
+    fecha: String(a.fecha || '').slice(0, 10),
+    hora: a.hora || '',
+    asistencia_id: a.asistencia_id ?? null,
+    alumno_nombre: a.alumno_nombre || '',
+  })) : []
+  if (acRows.length && !drifted()) await bulkPut('accesos', acRows)
   if (!drifted() && extMap && typeof extMap === 'object') await put('meta', { id: 'alumnos-ext', value: extMap }).catch(() => {})
 }
 

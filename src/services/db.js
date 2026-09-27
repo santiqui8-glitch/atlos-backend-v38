@@ -1,14 +1,14 @@
 import { getCurrentTenant } from './tenant';
 
 const DB_NAME = 'atlos-db'
-const DB_VERSION = 5
-const STORES = ['students', 'payments', 'attendance', 'routines', 'clases', 'inscripciones', 'profesores', 'library', 'meta', 'planes', 'membresias', 'movimientos', 'cierres']
+const DB_VERSION = 6
+const STORES = ['students', 'payments', 'attendance', 'routines', 'clases', 'inscripciones', 'profesores', 'library', 'meta', 'planes', 'membresias', 'movimientos', 'cierres', 'accesos']
 
 // V39-06E: solo estos stores usan clave física tenant-scoped. El resto conserva
 // keyPath 'id' y comportamiento legacy (son espejos muertos o sistema).
 // V44-E: planes/membresias son EFFECTIVE (aislamiento fisico por tenant, igual
 // que students/payments). Filas usan nombres backend 1:1 (sin traduccion).
-const EFFECTIVE_STORES = ['students', 'payments', 'attendance', 'routines', 'planes', 'membresias', 'movimientos', 'cierres'];
+const EFFECTIVE_STORES = ['students', 'payments', 'attendance', 'routines', 'planes', 'membresias', 'movimientos', 'cierres', 'accesos'];
 
 // V39-06B: aislamiento por tenant centralizado aquí. 'meta' es sistema (flags),
 // no se filtra. Ningún registro sin gymId es dato activo; ningún gymId ajeno
@@ -77,9 +77,9 @@ function openDB() {
           }
         })().catch(() => { try { vtx.abort() } catch {} });
       } else {
-        // V44-E v3 -> v4 / V44-G v4 -> v5: los stores nuevos (planes, membresias,
-        // movimientos, cierres) se crean aqui; los existentes se conservan
-        // intactos con todos sus registros.
+        // V44-E v3 -> v4 / V44-G v4 -> v5 / V44-H v5 -> v6: los stores nuevos
+        // (planes, membresias, movimientos, cierres, accesos) se crean aqui;
+        // los existentes se conservan intactos con todos sus registros.
         for (const storeName of EFFECTIVE_STORES) {
           if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName);
         }
