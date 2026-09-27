@@ -4,6 +4,8 @@ import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID,
 import { startSync, stopSync } from './services/sync'
 import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant, removeDeletedId } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
+import { estadoMembresia } from './utils/membresia.js'
+import { procesarCobro } from './services/cobro.js'
 import Login from './components/Login.jsx'
 import GymGate from './components/GymGate.jsx'
 import Modal from './components/Modal.jsx'
@@ -18,6 +20,7 @@ import VistaProfesores from './pages/VistaProfesores.jsx'
 // El fallback de Suspense es intencionalmente simple.
 const VistaReportes = lazy(() => import('./pages/VistaReportes.jsx'))
 const VistaPlanes = lazy(() => import('./pages/VistaPlanes.jsx'))
+const VistaComercial = lazy(() => import('./pages/VistaComercial.jsx'))
 const VistaPersonal = lazy(() => import('./pages/VistaPersonal.jsx'))
 const VistaLicencias = lazy(() => import('./pages/VistaLicencias.jsx'))
 
@@ -53,6 +56,9 @@ export default function App(){
   const [profesores,setProfesores]=useState([])
   const [dashboard,setDashboard]=useState(null)
   const [usuarios,setUsuarios]=useState([])
+  // V44-E: catalogo comercial + membresias (refresh los puebla, IDB de respaldo).
+  const [planes,setPlanes]=useState([])
+  const [membresias,setMembresias]=useState([])
   const [online,setOnline]=useState(navigator.onLine)
   const [modal,setModal]=useState(null)
   const [renewAlumno,setRenewAlumno]=useState(null)
@@ -73,11 +79,12 @@ export default function App(){
     ['planes','🏋','Rutinas'],
     ['profesores','🎓','Profesores'],
     ['personal','👤','Personal'],
+    ['comercial','🏷','Planes'],
   ]
   let nav=rol==='Empleado' ? navBase.filter(([k])=>!['personal','reportes'].includes(k)) : [...navBase]
   if(usuario.toLowerCase()==='admin' && ['Dueño','Administrador'].includes(rol)) nav=[...nav,['licencias','📈','Licencias']]
   // DEV PREVIEW ONLY — permisos mínimos de navegación visual: sin personal ni licencias.
-  if(preview) nav=nav.filter(([k])=>!['personal','licencias'].includes(k))
+  if(preview) nav=nav.filter(([k])=>!['personal','licencias','comercial'].includes(k))
 
   const refresh=async()=>{
     // V39-11B: sin solapamientos + snapshot de tenant ANTES de la primera
@@ -86,7 +93,7 @@ export default function App(){
     refreshing=true;
     const ctxTenant=getCurrentTenant();
     try{
-      const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw]=await Promise.all([
+      const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw,plRaw,mbRaw]=await Promise.all([
         api.alumnos().catch(err=>{ console.warn('[refresh]','alumnos',err?.message||err); return null }),
         api.pagos().catch(err=>{ console.warn('[refresh]','pagos',err?.message||err); return null }),
         api.asistencia().catch(err=>{ console.warn('[refresh]','asistencia',err?.message||err); return null }),
@@ -96,6 +103,8 @@ export default function App(){
         api.dashboard().catch(err=>{ console.warn('[refresh]','dashboard',err?.message||err); return null }),
         api.usuarios().catch(err=>{ console.warn('[refresh]','usuarios',err?.message||err); return null }),
         api.profesores().catch(err=>{ console.warn('[refresh]','profesores',err?.message||err); return null }),
+        api.planes().catch(err=>{ console.warn('[refresh]','planes',err?.message||err); return null }),
+        api.membresias().catch(err=>{ console.warn('[refresh]','membresias',err?.message||err); return null }),
       ])
       const localS=await list('students'); const localP=await list('payments'); const localA=await list('attendance'); const localR=await list('routines')
       const sCloud=Array.isArray(sRaw)?sRaw.map(j=>({id:String(j.id),name:j.nombre||j.name||'Sin nombre',dni:j.dni||j.telefono||'',phone:j.telefono||j.phone||'',joinedAt:j.fecha_ingreso||j.joinedAt||today(),status:j.status||'activo',edad:j.edad||null,email:j.email||'', experience:j.experience||'principiante', goal:j.goal||j.enfoque||'hipertrofia', days_per_week:j.days_per_week||3, notes:j.notes||''})):null
@@ -158,13 +167,36 @@ export default function App(){
         if(curCloud&&!prevCloud) profByKey.set(key,x)
       }
       const profs=Array.from(profByKey.values()).filter(x=>!delProfs.has(String(x.id)))
+      // V44-E: planes (dedup uuid-vs-servidor por nombre, gana servidor) y
+      // membresias (server + locales no duplicadas) con tombstones propios.
+      const delPlanes=new Set(tenantGetJSON('deleted-planes',[]).map(String))
+      const delMembs=new Set(tenantGetJSON('deleted-membresias',[]).map(String))
+      const localPl=await list('planes'); const localMb=await list('membresias');
+      let pls;
+      if(Array.isArray(plRaw)){
+        const byNombre=new Map();
+        for(const x of [...plRaw, ...localPl]){
+          const k=String(x.nombre||'').toLowerCase().trim();
+          if(!byNombre.has(k)) byNombre.set(k,x);
+          else { const ex=byNombre.get(k); const isExUUID=String(ex.id).includes('-'); const isNewUUID=String(x.id).includes('-'); if(isExUUID&&!isNewUUID) byNombre.set(k,x) }
+        }
+        pls=Array.from(byNombre.values());
+      } else pls=localPl;
+      pls=pls.filter(x=>!delPlanes.has(String(x.id)));
+      let mbs;
+      if(Array.isArray(mbRaw)){
+        const srvKeys=new Set(mbRaw.map(m=>`${m.alumno_id}|${m.fecha_inicio}`));
+        const locales=localMb.filter(m=>String(m.id).includes('-')?!srvKeys.has(`${m.alumno_id}|${m.fecha_inicio}`):true);
+        mbs=Array.from(new Map([...mbRaw.map(m=>({...m,id:String(m.id)})),...locales].map(x=>[String(x.id),x])).values());
+      } else mbs=localMb;
+      mbs=mbs.filter(x=>!delMembs.has(String(x.id)));
       // V39-11B: fail-closed — el estado solo se actualiza para el tenant que inició el refresh.
       if(getCurrentTenant()!==ctxTenant) return;
       if(!s.length){
         // no reseed demo si el usuario ya borró alumnos (los 3 demo Juan/Sofía/Martín volvían siempre)
         if(import.meta.env.DEV && delAlumnos.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id))); setStudents(filteredSeeded) } else { setStudents([]) }
       } else setStudents(s)
-      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
+      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); setPlanes(pls); setMembresias(mbs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
       return
     }catch(e){ console.error('refresh',e); return }
     finally{ refreshing=false }
@@ -229,8 +261,39 @@ export default function App(){
     }finally{ savingAlumno=false }
   }
   const savePayment=async(e)=>{ e.preventDefault(); if(savingPago) return; savingPago=true; try{
-    const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-'); const monto=Number(f.get('amount')); const fecha=f.get('date')||today(); const note=f.get('note')||'Cuota Mensual'; const metodo='Efectivo'
+    const f=new FormData(e.currentTarget); const sid=f.get('studentId'); const isLocalUUID=String(sid).includes('-');
+    const planId=f.get('planId')||''; const monto=Number(f.get('amount')); const fecha=f.get('date')||today();
+    const note=f.get('note')||'Cuota Mensual'; const metodo=f.get('metodo')||'Efectivo';
     const localId=crypto.randomUUID();
+    const plan=planes.find(p=>String(p.id)===String(planId));
+    if(!isLocalUUID && plan){
+      // V44-E-09: flujo comercial ALUMNO -> PLAN -> MEMBRESIA -> PAGO.
+      const alum=students.find(s=>String(s.id)===String(sid));
+      const em=estadoMembresia(alum||{id:sid},{pagos:payments,membresias,planes});
+      const opM=newOperationId(), opP=newOperationId();
+      let res;
+      try{ res=await procesarCobro({api,isNetworkError:esErrorDeRed},{alumnoId:Number(sid),plan,precio:monto,metodo,concepto:note,fecha,em,opIdMemb:opM,opIdPago:opP}); }
+      catch(err){ alert('No se pudo registrar: '+((err&&err.message)||err)); return }
+      if(res.status==='omitido') return; // doble submit concurrente con mismas keys
+      if(res.status==='offline'){
+        for(const op of res.queueOps) queuePush(op.type,op.payload,op.extra);
+        try{ await put('membresias',res.local.membresia) }catch{}
+        try{ await put('payments',{...res.local.pago,studentId:String(sid)}) }catch{}
+        setModal(null); refresh(); return;
+      }
+      if(res.status==='pago-offline'){
+        const op=res.queueOps[0]; queuePush(op.type,op.payload,op.extra);
+        try{ await put('payments',{...res.local.pago,studentId:String(sid)}) }catch{}
+        setModal(null); refresh(); return;
+      }
+      if(res.status==='pago-local'){
+        try{ await put('payments',{...res.local.pago,studentId:String(sid)}) }catch{}
+        if(res.error) alert('Pago registrado localmente. Aviso: '+res.error);
+        setModal(null); refresh(); return;
+      }
+      setModal(null); refresh(); return; // ok
+    }
+    // Legacy: sin plan (o alumno local) — flujo anterior intacto.
     if(!isLocalUUID){ const opId=newOperationId(); try{ await api.crearPago({alumno_id:Number(sid), monto, concepto:note, metodo},{operationId:opId}); setModal(null); refresh(); return }catch(err){ console.warn('crearPago api fallo, fallback local',err.message); if(String(err.message).includes('Failed to fetch')||String(err.message).includes('fetch')) queuePush('pago', {alumno_id:Number(sid), monto, concepto:note, metodo, _localId:localId}, {fecha, operationId:opId}) } }
     await put('payments',{id:localId,_localId:localId,studentId:String(sid),amount:monto,date:fecha,note,metodo}); setModal(null); refresh() }finally{ savingPago=false } }
   const markAttendanceDNI=async(dni)=>{ // torniquete por DNI
@@ -296,13 +359,11 @@ export default function App(){
     const arr=[]
     const hoy=new Date(); hoy.setHours(0,0,0,0)
     for(const s of students){
-      const pagosAlum=payments.filter(p=>String(p.studentId)===String(s.id))
-      const lastPago=pagosAlum.slice().sort((a,b)=> (parseFecha(b.date)||new Date(0)) - (parseFecha(a.date)||new Date(0)))[0]
-      let venc=null; if(lastPago){ const pd=parseFecha(lastPago.date); if(pd){ venc=new Date(pd); venc.setDate(venc.getDate()+30) } }
-      const diffVenc=venc? Math.ceil((venc - hoy)/86400000) : null
-      if(venc && diffVenc!==null && diffVenc>=0 && diffVenc<=3) arr.push({id:`vence-${s.id}`, icon:'⚠️', text:`Cuota vence en ${diffVenc} días — ${s.name}`, color:'var(--warning)'})
-      if(venc && diffVenc!==null && diffVenc<0) arr.push({id:`vencida-${s.id}`, icon:'🔴', text:`Cuota vencida — ${s.name}`, color:'var(--danger)'})
-      if(!venc && !pagosAlum.length) arr.push({id:`pend-${s.id}`, icon:'💰', text:`Pago pendiente — ${s.name} no tiene pagos`, color:'var(--warning)'})
+      // V44-E: fuente unica de vencimiento (membresia canonica o fallback +30).
+      const em=estadoMembresia(s,{pagos:payments,membresias,planes});
+      if(em.estado==='por_vencer') arr.push({id:`vence-${s.id}`, icon:'⚠️', text:`Cuota vence en ${em.dias} días — ${s.name}`, color:'var(--warning)'})
+      else if(em.estado==='vencida') arr.push({id:`vencida-${s.id}`, icon:'🔴', text:`Cuota vencida — ${s.name}`, color:'var(--danger)'})
+      else if(em.estado==='sin_pagos') arr.push({id:`pend-${s.id}`, icon:'💰', text:`Pago pendiente — ${s.name} no tiene pagos`, color:'var(--warning)'})
       // asistencias
       const asistAlum=attendance.filter(a=>String(a.studentId)===String(s.id))
       const lastAsist=asistAlum.slice().sort((a,b)=> (parseFecha(b.date)||new Date(0)) - (parseFecha(a.date)||new Date(0)))[0]
@@ -317,7 +378,7 @@ export default function App(){
     }
     // dedup por id
     const seen=new Set(); return arr.filter(n=>{ if(seen.has(n.id)) return false; seen.add(n.id); return true }).slice(0,20)
-  },[students,payments,attendance])
+  },[students,payments,attendance,membresias,planes])
   const [showNotifs,setShowNotifs]=useState(false)
   if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol) && !DEV_PREVIEW){
     return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearTenantEntityData(); clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
@@ -355,20 +416,21 @@ export default function App(){
         <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setPreview(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
       <Suspense fallback={<div style={{padding:20,minHeight:400,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
       {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
-      {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} onNew={()=>setModal('payment')} refresh={refresh}/>}
+      {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} planes={planes} membresias={membresias} onNew={()=>setModal('payment')} refresh={refresh}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
-      {page==='planificacion'&&<VistaPlanificacion students={filtered} query={query} setQuery={setQuery} stats={stats} payments={payments} attendance={attendance} routines={routines} onNew={()=>setModal('student')} onRenew={(alumno)=>{ setRenewAlumno(String(alumno.id)); setModal('payment') }} refresh={refresh}/>}
-      {page==='asistencia'&&<VistaAsistencia students={students} attendance={attendance} payments={payments} query={query} setQuery={setQuery} onCheckin={markAttendanceDNI} refresh={refresh}/>}
+      {page==='planificacion'&&<VistaPlanificacion students={filtered} query={query} setQuery={setQuery} stats={stats} payments={payments} attendance={attendance} routines={routines} planes={planes} membresias={membresias} onNew={()=>setModal('student')} onRenew={(alumno)=>{ setRenewAlumno(String(alumno.id)); setModal('payment') }} refresh={refresh}/>}
+      {page==='asistencia'&&<VistaAsistencia students={students} attendance={attendance} payments={payments} membresias={membresias} query={query} setQuery={setQuery} onCheckin={markAttendanceDNI} refresh={refresh}/>}
       {page==='turnos'&&<VistaClases clases={clases} students={students} profesores={profesores} onNew={()=>setModal('clase')} refresh={refresh}/>}
       {page==='planes'&&<VistaPlanes students={students} routines={routines} ejercicios={ejercicios} onNew={()=>setModal('routine')} refresh={refresh}/>}
       {page==='profesores'&&<VistaProfesores profesores={profesores} onNew={()=>setModal('profesor')} refresh={refresh}/>}
       {page==='personal'&&<VistaPersonal usuarios={usuarios} onNew={()=>setModal('usuario')} refresh={refresh}/>}
+      {page==='comercial'&&<VistaComercial planes={planes} membresias={membresias} rol={rol} refresh={refresh}/>}
       {page==='licencias'&&<VistaLicencias/>}
       </Suspense>
     </main>
     {modal&&<Modal title={{student:'Nuevo alumno',payment:'Registrar pago',routine:'Agregar ejercicio',clase:'Nueva clase',usuario:'Nuevo usuario',profesor:'Nuevo profesor'}[modal]||modal} onClose={()=>{setModal(null); setRenewAlumno(null)}}>
       {modal==='student'&&<StudentForm onSubmit={saveStudent}/>}
-      {modal==='payment'&&<PaymentForm students={students} onSubmit={(e)=>{ setRenewAlumno(null); return savePayment(e)}} initialStudentId={renewAlumno}/>}
+      {modal==='payment'&&<PaymentForm students={students} planes={planes} membresias={membresias} payments={payments} onSubmit={(e)=>{ setRenewAlumno(null); return savePayment(e)}} initialStudentId={renewAlumno}/>}
       {modal==='routine'&&<RoutineForm students={students} onSubmit={saveRoutine}/>}
       {modal==='clase'&&<ClaseForm profesores={profesores} onSubmit={saveClase}/>}
       {modal==='usuario'&&<UsuarioForm onSubmit={saveUsuario}/>}

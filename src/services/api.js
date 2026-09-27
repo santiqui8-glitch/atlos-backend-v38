@@ -102,6 +102,14 @@ export const api={
   claseAlumnos:(id)=>request(`/clases/${id}/alumnos`),
   inscribirClase:(clase_id,alumno_id,opts)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id},...(opts||{})}),
   cuotas:(params)=>request('/cuotas'+(params?`?${new URLSearchParams(params)}`:'')),
+  // V44-E: planes y membresias (mismo patron: opts acarrea operationId).
+  planes:(params)=>request('/planes'+(params?`?${new URLSearchParams(params)}`:'')),
+  crearPlan:(data,opts)=>request('/planes',{method:'POST',body:data,...(opts||{})}),
+  actualizarPlan:(id,data,opts)=>request(`/planes/${id}`,{method:'PUT',body:data,...(opts||{})}),
+  desactivarPlan:(id,opts)=>request(`/planes/${id}`,{method:'DELETE',...(opts||{})}),
+  membresias:(params)=>request('/membresias'+(params?`?${new URLSearchParams(params)}`:'')),
+  crearMembresia:(data,opts)=>request('/membresias',{method:'POST',body:data,...(opts||{})}),
+  actualizarMembresia:(id,data,opts)=>request(`/membresias/${id}`,{method:'PUT',body:data,...(opts||{})}),
   dashboard:()=>request('/dashboard'),
   exercisesLibrary:()=>request('/exercises-library'),
   
@@ -216,6 +224,18 @@ function remapPendingAlumno(items, lid, sid){
     if(it.type==='checkin'&&String(pl.alumno_id??'')===lid){ pl.alumno_id=sid; n++ }
     else if(it.type==='routine'&&String(pl.student_id??'')===lid){ pl.student_id=sid; n++ }
     else if(it.type==='pago'&&String(pl.alumno_id??'')===lid){ pl.alumno_id=sid; n++ }
+  }
+  return n;
+}
+
+// V44-E: remapea membresiaLocalId → membresia_id real en pagos encolados
+// (mismo objeto, mismo patron que remapPendingAlumno). El pago conserva
+// membresia_id definitivo y pierde la referencia local.
+function remapPendingMembresia(items, lid, sid){
+  let n=false;
+  for(const it of items||[]){
+    const pl=it&&it.payload; if(!pl||typeof pl!=='object') continue;
+    if(it.type==='pago'&&String(pl.membresiaLocalId??'')===String(lid)){ pl.membresia_id=sid; delete pl.membresiaLocalId; n=true }
   }
   return n;
 }
@@ -455,6 +475,8 @@ export async function flushQueue(){
   // pushDuringFlush previo) no debe reenviarse jamás: se descarta al vuelo.
   const rpOps=new Set();
   for(const it of own){ if(it&&it.state==='reconcile_pending'&&typeof it.operationId==='string'&&it.operationId) rpOps.add(it.operationId) }
+  // V44-E: mapa _localId -> id de servidor de membresias resueltas en este ciclo.
+  const membIdMap={};
   let nSkipped=0, drifted=false;
   for(let idx=0; idx<own.length; idx++){
     const item=own[idx];
@@ -514,7 +536,20 @@ export async function flushQueue(){
         else if(_r&&_r.code){ markReconcilePending(item, _r.code==='no-server-id'?'alumno: 2xx sin ID de servidor':'alumno: reconciliación local incompleta'); remain.push(item); }
         else remain.push(item);
       }
-      else if(item.type==='pago'){ const {_localId, ...pagoBody}=(item.payload||{}); await api.crearPago(pagoBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='pago'){
+        // V44-E: dependencia membresia -> pago. Si el pago referencia una
+        // membresia local aun no resuelta y sigue encolada, se difiere a otro
+        // ciclo (sin reenviar). Si ya se resolvio, se sustituye el id real.
+        const {membresiaLocalId, ...pagoBody}=(item.payload||{});
+        delete pagoBody._localId;
+        const _mlid=membresiaLocalId!=null?String(membresiaLocalId):'';
+        if(_mlid&&membIdMap[_mlid]!=null){ pagoBody.membresia_id=membIdMap[_mlid]; }
+        else if(_mlid){
+          const _pend=own.some(o=>o&&o.type==='membresia'&&!o.state&&String(o.payload&&o.payload._localId||'')===_mlid);
+          if(_pend){ remain.push(item); continue; }
+        }
+        await api.crearPago(pagoBody,{...FLUSH_OPTS, operationId:item&&item.operationId});
+      }
       else if(item.type==='checkin'){ const _lid=item.payload&&typeof item.payload==='object'?String(item.payload._localId||''):''; await api.checkin(item.payload.alumno_id,{...FLUSH_OPTS, operationId:item&&item.operationId}); if(_lid){ try{ await remove('attendance',_lid) }catch(e){ console.warn('[flush] checkin reconcile',e?.message||e,_lid) } } }
       else if(item.type==='clase'){
         const _r=await flushClaseCrear(item);
@@ -538,6 +573,17 @@ export async function flushQueue(){
       }
       else if(item.type==='updateProfesor') await api.actualizarProfesor(item.payload.id,{nombre:item.payload.nombre,apellido:item.payload.apellido,telefono:item.payload.telefono,especialidad:item.payload.especialidad},{...FLUSH_OPTS, operationId:item&&item.operationId});
       else if(item.type==='deleteProfesor') await api.borrarProfesor(item.payload.id,{...FLUSH_OPTS, operationId:item&&item.operationId});
+      // V44-E: planes/membresias (mismo patron fire-and-drop que pago). La
+      // membresia captura su id de servidor para remapear pagos dependientes.
+      else if(item.type==='plan'){ const {_localId, ...planBody}=(item.payload||{}); await api.crearPlan(planBody,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='updatePlan'){ await api.actualizarPlan(item.payload.id,{nombre:item.payload.nombre,precio:item.payload.precio,duracion_dias:item.payload.duracion_dias,dias_semana:item.payload.dias_semana,activo:item.payload.activo},{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='membresia'){
+        const {_localId, ...membBody}=(item.payload||{});
+        const _r=await api.crearMembresia(membBody,{...FLUSH_OPTS, operationId:item&&item.operationId});
+        const _sid=(_r&&(_r.id??_r._id))||null;
+        if(_localId&&_sid!=null){ membIdMap[String(_localId)]=String(_sid); remapPendingMembresia(own,_localId,_sid); }
+      }
+      else if(item.type==='updateMembresia'){ await api.actualizarMembresia(item.payload.id,{estado:item.payload.estado},{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else remain.push(item);
     }catch(e){
       const _pl=item.payload||{};

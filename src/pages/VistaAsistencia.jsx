@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import useClock from '../hooks/useClock.js'
 import { parseFecha } from '../utils/helpers.js'
+import { estadoMembresia } from '../utils/membresia.js'
 
 
-export default function VistaAsistencia({students,payments=[],onCheckin,refresh}){
+export default function VistaAsistencia({students,payments=[],membresias=[],onCheckin,refresh}){
   const now=useClock()
   const [dni,setDni]=useState('')
   const [preview,setPreview]=useState(null)
@@ -14,17 +15,12 @@ export default function VistaAsistencia({students,payments=[],onCheckin,refresh}
     const q=dni.trim(); if(!q) return
     try{
       const alum=await onCheckin(q)
-      // calcular días en gimnasio y días restantes suscripción mensual
+      // calcular días en gimnasio y días restantes (fuente unica V44-E).
       let diasGym=0; try{ const pdj=parseFecha(alum.joinedAt); if(pdj) diasGym=Math.max(0,Math.floor((Date.now()-pdj)/86400000)) }catch{}
       let diasRest=0; try{
-        const pagosAlum=payments.filter(p=>String(p.studentId)===String(alum.id))
-        if(pagosAlum.length){
-          const last=pagosAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]
-          const pd=parseFecha(last.date)
-          if(pd){ const venc=new Date(pd); venc.setDate(venc.getDate()+30); diasRest=Math.ceil((venc-Date.now())/86400000); if(diasRest<0) diasRest=0 }
-        } else {
-          diasRest=Math.max(0,30 - (diasGym % 30 || 30))
-        }
+        const em=estadoMembresia(alum,{pagos:payments,membresias});
+        if(em.dias!=null) diasRest=Math.max(0,em.dias);
+        else diasRest=Math.max(0,30 - (diasGym % 30 || 30));
       }catch{}
       setMsg(`Bienvenido ${alum.name} que tengas buen entreno! · ${diasGym} días en el gimnasio · Te quedan ${diasRest} días de suscripción mensual`)
       setDni(''); setPreview(null); setDniDisplay('----'); setTimeout(()=>setMsg(''),6000)

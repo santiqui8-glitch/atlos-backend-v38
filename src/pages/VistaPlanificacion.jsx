@@ -3,10 +3,11 @@ import { api, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationI
 import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
+import { estadoMembresia } from '../utils/membresia.js'
 import { Empty } from '../components/ui.jsx'
 
 
-export default function VistaPlanificacion({students,query,setQuery,stats,payments=[],attendance=[],routines=[],onNew,onRenew,refresh}){
+export default function VistaPlanificacion({students,query,setQuery,stats,payments=[],attendance=[],routines=[],planes=[],membresias=[],onNew,onRenew,refresh}){
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null)
   const [detail,setDetail]=useState(null)
@@ -135,7 +136,11 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       </form>
     </div></div>}
     {detail&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><div className="modal" style={{width:'min(720px,95vw)',maxHeight:'90vh',overflow:'auto'}}><div className="modal-head"><h3>{detail.name}</h3><button onClick={()=>setDetail(null)} aria-label="Cerrar">×</button></div>
-      {(()=>{ const pagosAlum=payments.filter(p=>String(p.studentId)===String(detail.id)); const ultimoPago=pagosAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]; const estadoCuota=(()=>{ if(!ultimoPago) return {label:'Sin pagos',color:'var(--muted)',dot:'🔴'}; const pd=parseFecha(ultimoPago.date); if(!pd) return {label:'Vencida',color:'var(--danger)',dot:'🔴'}; const venc=new Date(pd); venc.setDate(venc.getDate()+30); const diff=Math.ceil((venc - new Date())/86400000); if(diff<0) return {label:'Vencida',color:'var(--danger)',dot:'🔴'}; if(diff<=5) return {label:`Por vencer (${diff}d)`,color:'var(--warning)',dot:'🟡'}; return {label:`Al día (${diff}d)`,color:'var(--success)',dot:'🟢'} })(); const asistAlum=attendance.filter(a=>String(a.studentId)===String(detail.id)); const ultimoIng=asistAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]; const asistMes=asistAlum.filter(a=> isSameMonth(a.date, today())).length; const rutinaAlum=routines.filter(r=>String(r.studentId||r.alumno_id)===String(detail.id)); return <>
+      {(()=>{ const pagosAlum=payments.filter(p=>String(p.studentId)===String(detail.id));
+        // V44-E: fuente unica de estado/vencimiento (membresia canonica o fallback +30).
+        const em=estadoMembresia(detail,{pagos:payments,membresias,planes});
+        const estadoCuota=em.estado==='vigente'?{label:`Al día (${em.dias}d)`,color:'var(--success)',dot:'🟢'}:em.estado==='por_vencer'?{label:`Por vencer (${em.dias}d)`,color:'var(--warning)',dot:'🟡'}:em.estado==='cancelada'?{label:'Cancelada',color:'var(--muted)',dot:'⚪'}:em.estado==='sin_pagos'?{label:'Sin pagos',color:'var(--muted)',dot:'🔴'}:{label:'Vencida',color:'var(--danger)',dot:'🔴'};
+        const asistAlum=attendance.filter(a=>String(a.studentId)===String(detail.id)); const ultimoIng=asistAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]; const asistMes=asistAlum.filter(a=> isSameMonth(a.date, today())).length; const rutinaAlum=routines.filter(r=>String(r.studentId||r.alumno_id)===String(detail.id)); return <>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}}>
           <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12}}>
             <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>DATOS PERSONALES</div>
@@ -148,6 +153,12 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
           </div>
         </div>
         <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12,marginBottom:12}}>
+          <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>MEMBRESÍA</div>
+          {em.fuente==='membresia'
+            ? <div style={{display:'grid',gap:6,fontSize:12}}><div><b>Plan:</b> {em.planNombre||'—'}{em.precio!=null?` · ${money(em.precio)}`:''}</div><div><b>Inicio:</b> {em.inicio?toDisplay(em.inicio):'—'}</div><div><b>Vencimiento:</b> {em.vencimiento?toDisplay(em.vencimiento):'—'}</div></div>
+            : <div style={{fontSize:12,color:'var(--muted)'}}>Sin membresía — se usa último pago + 30 días.<br/>El flujo completo de planes llega en E-09.</div>}
+        </div>
+        <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12,marginBottom:12}}>
           <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>HISTORIAL DE PAGOS</div>
           {pagosAlum.length? pagosAlum.slice(-5).reverse().map(p=><div key={p.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid var(--card-border)',fontSize:12}}><span>{toDisplay(p.date)} · {p.note||'Cuota'}</span><span style={{fontWeight:700}}>{money(p.amount)}</span></div>) : <div style={{fontSize:12,color:'var(--muted)'}}>Sin pagos registrados</div>}
         </div>
@@ -158,8 +169,8 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         <div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:12,padding:12,marginBottom:12}}>
           <div style={{fontSize:11,letterSpacing:'.06em',color:'var(--muted)',fontWeight:700,marginBottom:8}}>WHATSAPP INTEGRADO</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-            <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const venc=(()=>{ const p=pagosAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]; if(!p) return '10/09'; const d=parseFecha(p.date); if(!d) return '10/09'; d.setDate(d.getDate()+30); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}` })(); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTe recordamos que tu cuota de ATLOS Gym vence el día ${venc}.\n¡Gracias por entrenar con nosotros! 💪`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{background:'var(--whatsapp)',color:'#fff',border:'1px solid var(--whatsapp)',fontSize:11}}>Enviar recordatorio de cuota</button>
-            <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const venc=(()=>{ const p=pagosAlum.slice().sort((a,b)=> parseFecha(b.date)-parseFecha(a.date))[0]; if(!p) return '10/09'; const d=parseFecha(p.date); if(!d) return '10/09'; d.setDate(d.getDate()+30); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}` })(); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTe recordamos que tu cuota de ATLOS Gym vence el día ${venc}.\n¡Gracias por entrenar con nosotros! 💪`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{fontSize:11}}>Mensaje automático</button>
+            <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const venc=(()=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(em.vencimiento||''); return m?`${m[3]}/${m[2]}`:'—' })(); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTe recordamos que tu cuota de ATLOS Gym vence el día ${venc}.\n¡Gracias por entrenar con nosotros! 💪`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{background:'var(--whatsapp)',color:'#fff',border:'1px solid var(--whatsapp)',fontSize:11}}>Enviar recordatorio de cuota</button>
+            <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const venc=(()=>{ const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(em.vencimiento||''); return m?`${m[3]}/${m[2]}`:'—' })(); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTe recordamos que tu cuota de ATLOS Gym vence el día ${venc}.\n¡Gracias por entrenar con nosotros! 💪`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{fontSize:11}}>Mensaje automático</button>
             <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTe recordamos que tu cuota vence pronto. ¡No te quedes sin entrenar! 💪`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{fontSize:11}}>Recordatorio de vencimiento</button>
             <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const msg=encodeURIComponent(`Hola ${detail.name.split(' ')[0]} 👋\nTu cuota está vencida. Por favor regularizá tu situación para seguir entrenando. ¡Te esperamos! 🔴`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{fontSize:11,borderColor:'var(--danger)',color:'var(--danger)'}}>Aviso de cuota vencida</button>
             <button className="ghost" onClick={()=>{ const tel=String(detail.phone||'').replace(/[^0-9]/g,''); if(!tel) return alert('Sin teléfono'); const msg=encodeURIComponent(`¡Feliz cumpleaños ${detail.name.split(' ')[0]}! 🎂🥳\nTe desea todo el equipo de ATLOS Gym. ¡Que tengas un gran día! 🎉`); window.open(`whatsapp://send?phone=549${tel}&text=${msg}`,'_blank') }} style={{fontSize:11,borderColor:'var(--accent-pink)',color:'var(--accent-pink)'}}>🎂 Feliz cumpleaños</button>

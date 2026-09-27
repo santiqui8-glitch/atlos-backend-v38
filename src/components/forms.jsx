@@ -1,10 +1,39 @@
-import React from 'react'
-import { onEnterNext, today } from '../utils/helpers.js'
+import React, { useState, useEffect } from 'react'
+import { onEnterNext, today, toDisplay, money } from '../utils/helpers.js'
+import { estadoMembresia } from '../utils/membresia.js'
+import { METODOS_PAGO, planesActivos, precioSugerido, calcularPeriodo } from '../services/cobro.js'
 
 
 export function StudentForm({onSubmit}){return <form onSubmit={onSubmit} onKeyDown={onEnterNext} className="form"><div className="form2"><label>Nombre*<input name="nombre" required/></label><label>Apellido*<input name="apellido" required/></label></div><div className="form2"><label>Edad<input name="edad" placeholder="Ej. 25"/></label><label>DNI<input name="dni" placeholder="Solo números"/></label></div><label>Fecha de nacimiento<input name="fecha_nac" type="date" /></label><div className="form2"><label>Enfoque<select name="enfoque" defaultValue="Hipertrofia"><option>Hipertrofia</option><option>Fuerza</option><option>Resistencia</option><option>Definición</option><option>Funcional</option><option>Rehabilitación</option></select></label><label>Nro de teléfono<input name="phone" placeholder="Ej. 221 555-0100"/></label></div><label>Mail<input name="mail" type="email" placeholder="ej@mail.com"/></label><label>Observaciones<textarea name="observaciones" rows="2" placeholder="Alergias, lesiones, objetivos..." style={{resize:'vertical',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10,padding:'10px'}}/></label><label>Fecha de ingreso (DD/MM/AAAA)<input name="joinedAt" defaultValue={today()} placeholder="DD/MM/AAAA" required/></label><button className="primary wide">Guardar alumno</button></form>}
 
-export function PaymentForm({students,onSubmit,initialStudentId}){return <form onSubmit={onSubmit} onKeyDown={onEnterNext} className="form"><label>Alumno<select name="studentId" required defaultValue={initialStudentId||''}><option value="">Seleccionar...</option>{students.map(s=><option key={s.id} value={s.id}>{s.name} — DNI {s.dni||'—'}</option>)}</select></label><div className="form2"><label>Monto<input name="amount" type="number" min="0" required/></label><label>Fecha<input name="date" type="date" defaultValue={today()}/></label></div><label>Detalle<input name="note" placeholder="Ej. Cuota septiembre"/></label><button className="primary wide">Registrar pago</button></form>}
+export function PaymentForm({students,planes=[],membresias=[],payments=[],onSubmit,initialStudentId}){
+  // V44-E-09: cobro comercial ALUMNO -> PLAN -> PERIODO -> MONTO -> METODO.
+  // Campos con name preservados para FormData (studentId/planId/amount/date/note/metodo).
+  const acts=planesActivos(planes);
+  const [sid,setSid]=useState(initialStudentId||'');
+  const alum=students.find(s=>String(s.id)===String(sid));
+  const em=alum?estadoMembresia(alum,{pagos:payments,membresias,planes}):null;
+  const planIni=em&&em.planId!=null?acts.find(p=>String(p.id)===String(em.planId)):null;
+  const [planId,setPlanId]=useState(planIni?String(planIni.id):(acts[0]?String(acts[0].id):''));
+  const plan=acts.find(p=>String(p.id)===String(planId))||planIni||acts[0]||null;
+  const [price,setPrice]=useState(precioSugerido(plan));
+  const [note,setNote]=useState(planIni?`Cuota ${planIni.nombre}`:'Cuota Mensual');
+  const [noteTouched,setNoteTouched]=useState(false);
+  const [metodo,setMetodo]=useState('Efectivo');
+  // Si los planes llegan despues de montar (refresh async), tomar el primero.
+  useEffect(()=>{ if(!planId && acts[0]){ const p=acts[0]; setPlanId(String(p.id)); setPrice(precioSugerido(p)); if(!noteTouched) setNote(`Cuota ${p.nombre}`) } },[acts.length, planId]);
+  const pickPlan=(id)=>{ const p=acts.find(x=>String(x.id)===String(id))||null; setPlanId(id); if(p){ setPrice(precioSugerido(p)); if(!noteTouched) setNote(`Cuota ${p.nombre}`) } };
+  const pickStudent=(id)=>{ setSid(id); const a=students.find(s=>String(s.id)===String(id)); const e2=a?estadoMembresia(a,{pagos:payments,membresias,planes}):null; const pi=e2&&e2.planId!=null?acts.find(p=>String(p.id)===String(e2.planId)):null; const pf=pi||acts[0]||null; setPlanId(pf?String(pf.id):''); if(pf){ setPrice(precioSugerido(pf)); if(!noteTouched) setNote(`Cuota ${pf.nombre}`) } };
+  const periodo=plan?calcularPeriodo({em,plan}):null;
+  return <form onSubmit={onSubmit} onKeyDown={onEnterNext} className="form">
+    <label>Alumno<select name="studentId" required value={sid} onChange={e=>pickStudent(e.target.value)}><option value="">Seleccionar...</option>{students.map(s=><option key={s.id} value={s.id}>{s.name} — DNI {s.dni||'—'}</option>)}</select></label>
+    <label>Plan<select name="planId" value={plan?String(plan.id):''} onChange={e=>pickPlan(e.target.value)}>{acts.length?acts.map(p=><option key={p.id} value={p.id}>{p.nombre} — {money(p.precio||0)}</option>):<option value="">Sin planes activos</option>}</select></label>
+    {plan&&periodo&&<div style={{background:'var(--bg)',border:'1px solid var(--card-border)',borderRadius:10,padding:'10px 12px',fontSize:12}}><div style={{display:'flex',justifyContent:'space-between'}}><span style={{color:'var(--muted)'}}>Período</span><b>{toDisplay(periodo.inicio)} → {toDisplay(periodo.vencimiento)}</b></div>{em&&em.estado!=='sin_pagos'&&<div style={{display:'flex',justifyContent:'space-between',marginTop:4}}><span style={{color:'var(--muted)'}}>Estado actual</span><b>{em.estado==='vigente'?`Al día (${em.dias}d)`:em.estado==='por_vencer'?`Por vencer (${em.dias}d)`:em.estado==='cancelada'?'Cancelada':'Vencida'}</b></div>}</div>}
+    <div className="form2"><label>Monto ($)<input name="amount" type="number" min="0" step="0.01" required value={price} onChange={e=>setPrice(e.target.value)}/></label><label>Fecha<input name="date" type="date" defaultValue={today()}/></label></div>
+    <div className="form2"><label>Detalle<input name="note" value={note} onChange={e=>{setNote(e.target.value); setNoteTouched(true)}} placeholder="Ej. Cuota septiembre"/></label><label>Método<select name="metodo" value={metodo} onChange={e=>setMetodo(e.target.value)}>{METODOS_PAGO.map(m=><option key={m}>{m}</option>)}</select></label></div>
+    <button className="primary wide">Registrar pago</button>
+  </form>
+}
 
 export function RoutineForm({students,onSubmit}){return <form onSubmit={onSubmit} onKeyDown={onEnterNext} className="form"><label>Alumno<select name="studentId" required><option value="">Seleccionar...</option>{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><div className="form2"><label>Día<select name="day">{[1,2,3,4,5,6,7].map(n=><option key={n}>Día {n}</option>)}</select></label><label>Ejercicio<input name="exercise" required/></label></div><div className="form2"><label>Series<input name="series" placeholder="4"/></label><label>Repeticiones<input name="reps" placeholder="10-12"/></label></div><label>Observaciones<input name="notes"/></label><button className="primary wide">Agregar ejercicio</button></form>}
 

@@ -58,6 +58,9 @@ export function sanitizeQueue() {
     const pl = item.payload || {}
     if (item.type === 'pago' || item.type === 'checkin') return hasBadId(pl.alumno_id)
     if (item.type === 'deleteClase' || item.type === 'updateClase' || item.type === 'updateProfesor' || item.type === 'deleteProfesor') return hasBadId(pl.id)
+    // V44-E: solo diagnostico (mismo nivel que el resto: warn + conteo).
+    if (item.type === 'membresia' || item.type === 'updateMembresia') return hasBadId(pl.alumno_id)
+    if (item.type === 'plan' || item.type === 'updatePlan') return !(pl.nombre && String(pl.nombre).trim())
     return false
   }
   let flagged = 0
@@ -97,13 +100,16 @@ async function pullAll() {
   const ctxTenant=getCurrentTenant();
   const drifted=()=>getCurrentTenant()!==ctxTenant;
   const empty = []
-  const [students, payments, attendance, routines, clases, profesores] = await Promise.all([
+  const [students, payments, attendance, routines, clases, profesores, planes, membresias] = await Promise.all([
     api.alumnos().catch(() => empty),
     api.pagos().catch(() => empty),
     api.asistencia().catch(() => empty),
     api.routines().catch(() => empty),
     api.clases().catch(() => empty),
     api.profesores().catch(() => empty),
+    // V44-E: pull de planes/membresias (mismo patron; fallo aislado por endpoint).
+    api.planes().catch(() => empty),
+    api.membresias().catch(() => empty),
   ])
   let extMap = {}
   try { extMap = tenantGetJSON('alumnos-ext',{}) } catch {}
@@ -113,6 +119,8 @@ async function pullAll() {
   const delPagosIds = readDeletedIds('deleted-pagos')
   const delClasesIds = readDeletedIds('deleted-clases')
   const delProfsIds = readDeletedIds('deleted-profesores')
+  const delPlanesIds = readDeletedIds('deleted-planes')
+  const delMembsIds = readDeletedIds('deleted-membresias')
   const now = new Date().toISOString()
   const studentsToPut = []
   for (const s of students) {
@@ -145,6 +153,8 @@ async function pullAll() {
     note: p.concepto || p.note || '',
     metodo: p.metodo || 'Efectivo',
     alumnoNombre: p.alumno_nombre || p.alumno || '',
+    // V44-E: membresia asociada (null = pago legacy). Sin recalculo.
+    membresia_id: p.membresia_id ?? null,
   }))
   if (pRows.length && !drifted()) await bulkPut('payments', pRows)
   const aRows = attendance.filter(a=>!delAlumnosIds.has(String(a.alumno_id||a.student_id||a.studentId||''))).map(a => ({
@@ -189,6 +199,27 @@ async function pullAll() {
     }
   }) : []
   if (prRows.length && !drifted()) await bulkPut('profesores', prRows)
+  // V44-E: planes/membresias (nombres backend 1:1; tombstones propios;
+  // membresias de alumnos eliminados se descartan como los pagos).
+  const plRows = Array.isArray(planes) ? planes.filter(x=>!delPlanesIds.has(String(x.id))).map(x => ({
+    id: String(x.id),
+    nombre: x.nombre || '',
+    precio: x.precio ?? 0,
+    duracion_dias: x.duracion_dias ?? 30,
+    dias_semana: x.dias_semana ?? 3,
+    activo: x.activo ?? 1,
+  })) : []
+  if (plRows.length && !drifted()) await bulkPut('planes', plRows)
+  const mRows = Array.isArray(membresias) ? membresias.filter(m=>!delMembsIds.has(String(m.id)) && !delAlumnosIds.has(String(m.alumno_id||''))).map(m => ({
+    id: String(m.id),
+    alumno_id: m.alumno_id,
+    plan_id: m.plan_id ?? null,
+    fecha_inicio: m.fecha_inicio || '',
+    fecha_vencimiento: m.fecha_vencimiento || '',
+    estado: m.estado || 'vigente',
+    precio_aplicado: m.precio_aplicado ?? 0,
+  })) : []
+  if (mRows.length && !drifted()) await bulkPut('membresias', mRows)
   if (!drifted() && extMap && typeof extMap === 'object') await put('meta', { id: 'alumnos-ext', value: extMap }).catch(() => {})
 }
 

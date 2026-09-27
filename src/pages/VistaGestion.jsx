@@ -3,11 +3,12 @@ import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQu
 import { pushDeletedId } from '../services/tenant'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today, parseFecha } from '../utils/helpers.js'
+import { estadoMembresia } from '../utils/membresia.js'
 import { Empty } from '../components/ui.jsx'
 
 
 const PAGE_SIZE=50;
-export default function VistaGestion({payments,students,stats,rol,onNew,refresh}){
+export default function VistaGestion({payments,students,stats,rol,planes=[],membresias=[],onNew,refresh}){
   const [sel,setSel]=useState(null)
   const [edit,setEdit]=useState(null) // pago a editar
   const [visibles,setVisibles]=useState(PAGE_SIZE) // V43-04: lista larga paginada local
@@ -16,13 +17,12 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
   const totalMes=payments.filter(p=>isSameMonth(p.date, today())).reduce((a,b)=>a+Number(b.amount||0),0)
   const qn=q.trim().toLowerCase();
   const filtrados=!qn?payments:payments.filter(p=>{ const s=students.find(x=>String(x.id)===String(p.studentId)); const hay=`${s?.name||p.alumnoNombre||''} ${p.note||''} ${p.metodo||''} ${p.amount||''} ${toDisplay(p.date)||''}`.toLowerCase(); return hay.includes(qn) })
-  // V44-D-10: estado del alumno seleccionado (misma regla +30 días ya usada en notifs/ficha).
+  // V44-E: fuente unica de estado/vencimiento (membresia canonica o fallback +30).
   const selAlumno=selected?students.find(s=>String(s.id)===String(selected.studentId)):null;
   const selPagos=selAlumno?payments.filter(p=>String(p.studentId)===String(selAlumno.id)):[];
   const selUltimo=selPagos.slice().sort((a,b)=>(parseFecha(b.date)||new Date(0))-(parseFecha(a.date)||new Date(0)))[0];
-  const selVenc=(()=>{ if(!selUltimo) return null; const pd=parseFecha(selUltimo.date); if(!pd) return null; const v=new Date(pd); v.setDate(v.getDate()+30); return v })();
-  const selDiff=selVenc?Math.ceil((selVenc-new Date(new Date().setHours(0,0,0,0)))/86400000):null;
-  const selEstado=!selAlumno?null:!selUltimo?{label:'Sin pagos',cls:'neutral'}:selDiff<0?{label:'Vencido',cls:'vencido'}:selDiff<=5?{label:`Por vencer (${selDiff}d)`,cls:'warn'}:{label:`Al día (${selDiff}d)`,cls:''};
+  const selEm=selAlumno?estadoMembresia(selAlumno,{pagos:payments,membresias,planes}):null;
+  const selEstado=!selAlumno?null:selEm.estado==='vigente'?{label:`Al día (${selEm.dias}d)`,cls:''}:selEm.estado==='por_vencer'?{label:`Por vencer (${selEm.dias}d)`,cls:'warn'}:selEm.estado==='cancelada'?{label:'Cancelada',cls:'neutral'}:selEm.estado==='sin_pagos'?{label:'Sin pagos',cls:'neutral'}:{label:'Vencido',cls:'vencido'};
   const handleDelete=async()=>{
     if(!selected) return alert('Seleccioná un pago de la lista.')
     if(!confirm(`¿Eliminar pago ID #${selected.id} de ${selected.alumnoNombre||students.find(s=>String(s.id)===String(selected.studentId))?.name||'—'}?`)) return
@@ -107,7 +107,7 @@ export default function VistaGestion({payments,students,stats,rol,onNew,refresh}
         })}
         {!filtrados.length&&<Empty text={q?"Sin resultados para la búsqueda.":"No hay pagos. Registrá el primero."}/>}
         {visibles<filtrados.length&&<button className="ghost" style={{marginTop:10,width:'100%'}} onClick={()=>setVisibles(v=>v+PAGE_SIZE)}>Ver más ({filtrados.length-visibles} restantes)</button>}
-        {selected&&<div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'10px 12px',fontSize:12,borderTop:'1px solid var(--card-border)',background:'var(--selected)'}}><b>{selAlumno?.name||selected.alumnoNombre||'—'}</b>{selEstado&&<span className={`badge ${selEstado.cls}`}>{selEstado.label}</span>}<span className="muted-text">Último pago: {selUltimo?`${toDisplay(selUltimo.date)} · ${money(selUltimo.amount)}`:'—'}{selVenc?` · Vence ${toDisplay(selVenc.toISOString().slice(0,10))}`:''}</span><button className="primary small" style={{marginLeft:'auto'}} onClick={onNew}>+ Registrar pago</button></div>}
+        {selected&&<div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',padding:'10px 12px',fontSize:12,borderTop:'1px solid var(--card-border)',background:'var(--selected)'}}><b>{selAlumno?.name||selected.alumnoNombre||'—'}</b>{selEstado&&<span className={`badge ${selEstado.cls}`}>{selEstado.label}</span>}<span className="muted-text">Último pago: {selUltimo?`${toDisplay(selUltimo.date)} · ${money(selUltimo.amount)}`:'—'}{selEm&&selEm.vencimiento?` · Vence ${toDisplay(selEm.vencimiento)}`:''}</span><button className="primary small" style={{marginLeft:'auto'}} onClick={onNew}>+ Registrar pago</button></div>}
       </div>
     </div>
     {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal"><div className="modal-head"><h3>Editar Pago</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
