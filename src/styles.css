@@ -224,7 +224,7 @@ textarea.field{height:auto;min-height:74px;resize:vertical}
 .muted-text{color:var(--muted);font-size:11px}
 .grid-planes-head{display:grid;grid-template-columns:3fr 1fr 1fr 1fr 1.8fr;gap:0;background:var(--table-head);border:1px solid var(--card-border);border-radius:var(--radius-md) var(--radius-md) 0 0;padding:10px 12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .grid-planes-row{display:grid;grid-template-columns:3fr 1fr 1fr 1fr 1.8fr;gap:0;align-items:center;background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-md);padding:10px 12px}
-.grid-planificacion{display:grid;grid-template-columns:48px 1fr 1fr 64px 118px 108px 132px 1.5fr 1.7fr 108px;gap:14}
+.grid-planificacion{display:grid;grid-template-columns:40px minmax(0,2.2fr) minmax(0,1.3fr) minmax(0,1.1fr) 132px 104px 28px;gap:12px;align-items:center}
 /* V44-D-09: tabla densa de alumnos (filas planas, sin cards). */
 .alumnos-table{background:var(--card);border:1px solid var(--card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);overflow:hidden}
 .alumnos-head{padding:10px 14px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:800;align-items:center;border-bottom:1px solid var(--card-border);background:var(--table-head)}
@@ -322,8 +322,8 @@ textarea.field{height:auto;min-height:74px;resize:vertical}
 .grid-planes-row>span:last-child{flex-wrap:wrap}
 .grid-ejercicios-head,.grid-ejercicios-row{grid-template-columns:minmax(0,1.2fr) auto}
 .grid-ejercicios-head>span:nth-child(3),.grid-ejercicios-row>span:nth-child(3),.grid-ejercicios-head>span:nth-child(4),.grid-ejercicios-row>span:nth-child(4),.grid-ejercicios-head>span:nth-child(5),.grid-ejercicios-row>span:nth-child(5){display:none}
-.grid-planificacion{grid-template-columns:minmax(0,1fr) 64px 118px}
-.grid-planificacion>span:nth-child(1),.grid-planificacion>span:nth-child(3),.grid-planificacion>span:nth-child(6),.grid-planificacion>span:nth-child(7),.grid-planificacion>span:nth-child(8),.grid-planificacion>span:nth-child(9),.grid-planificacion>span:nth-child(10){display:none}
+.grid-planificacion{grid-template-columns:36px minmax(0,1fr) 112px}
+.grid-planificacion>span:nth-child(3),.grid-planificacion>span:nth-child(4),.grid-planificacion>span:nth-child(6),.grid-planificacion>span:nth-child(7){display:none}
 }
 @media(max-width:760px){
 .app{grid-template-columns:1fr}

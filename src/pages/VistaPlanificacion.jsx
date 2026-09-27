@@ -13,9 +13,21 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
   const [detail,setDetail]=useState(null)
   const [page,setPage]=useState(1)
   const pageSize=20
-  useEffect(()=>{ setPage(1) },[query, students.length])
-  const totalPages=Math.max(1, Math.ceil(students.length/pageSize))
-  const pageStudents=students.slice((page-1)*pageSize, page*pageSize)
+  // V44-F: filtros locales por estado de membresía y plan (sin API nueva).
+  const [fEstado,setFEstado]=useState('todos')
+  const [fPlan,setFPlan]=useState('todos')
+  const emDe=(s)=>estadoMembresia(s,{pagos:payments,membresias,planes});
+  useEffect(()=>{ setPage(1) },[query, students.length, fEstado, fPlan])
+  const filtrados=students.filter(s=>{
+    if(fEstado!=='todos' && emDe(s).estado!==fEstado) return false;
+    if(fPlan==='sin-plan'){ const e=emDe(s); if(e.fuente==='membresia') return false; }
+    else if(fPlan!=='todos'){ const e=emDe(s); if(String(e.planId??'')!==String(fPlan)) return false; }
+    return true;
+  });
+  const totalPages=Math.max(1, Math.ceil(filtrados.length/pageSize))
+  const pageStudents=filtrados.slice((page-1)*pageSize, page*pageSize)
+  const hayFiltro=Boolean(query)||fEstado!=='todos'||fPlan!=='todos';
+  const emptyTxt=hayFiltro?'Sin resultados para la búsqueda o filtros.':'No hay alumnos. Registrá el primero con + Nuevo alumno.';
   const selected=students.find(s=>String(s.id)===String(sel))
   const handleDelete=async()=>{
     const target=selected || students.find(s=>String(s.id)===String(sel))
@@ -93,35 +105,46 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
       </div>
     </div>
     <div className="toolbar">
-      <div className="search-wrap"><input className="field-search" aria-label="Buscar alumno" placeholder="Buscar alumno..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+      <div className="search-wrap"><input className="field-search" aria-label="Buscar alumno" placeholder="🔎 Buscar por nombre, apellido, DNI o teléfono..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+      <select className="field" style={{maxWidth:170}} aria-label="Filtrar por estado" value={fEstado} onChange={e=>setFEstado(e.target.value)}>
+        <option value="todos">Todos los estados</option>
+        <option value="vigente">Al día</option>
+        <option value="por_vencer">Por vencer</option>
+        <option value="vencida">Vencidos</option>
+        <option value="sin_pagos">Sin pagos</option>
+        <option value="cancelada">Cancelada</option>
+      </select>
+      <select className="field" style={{maxWidth:180}} aria-label="Filtrar por plan" value={fPlan} onChange={e=>setFPlan(e.target.value)}>
+        <option value="todos">Todos los planes</option>
+        <option value="sin-plan">Sin membresía</option>
+        {planes.filter(p=>p.activo).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+      </select>
     </div>
     <div className="cards" style={{gridTemplateColumns:'repeat(3,1fr)',marginTop:0}}><div className="stat green"><div className="stat-icon" aria-hidden="true">👥</div><span>Alumnos</span><strong>{stats.total}</strong></div><div className="stat accent"><div className="stat-icon" aria-hidden="true">📋</div><span>Con rutina</span><strong>{stats.conRutina}</strong></div><div className="stat blue"><div className="stat-icon" aria-hidden="true">🏋</div><span>Ejercicios</span><strong>{stats.totalEj}</strong></div></div>
     <div style={{marginTop:14,display:'grid',gap:6}}>
       <div className="alumnos-table">
-      <div className="grid-planificacion alumnos-head"><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>ID</span><span style={{display:'flex',alignItems:'center'}}>Nombre</span><span style={{display:'flex',alignItems:'center'}}>Apellido</span><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>Edad</span><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>Enfoque</span><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>DNI</span><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>Teléfono</span><span style={{display:'flex',alignItems:'center'}}>Mail</span><span style={{display:'flex',alignItems:'center'}}>Observaciones</span><span style={{display:'flex',alignItems:'center',justifyContent:'center'}}>Ingreso</span></div>
+      <div className="grid-planificacion alumnos-head"><span></span><span style={{display:'flex',alignItems:'center'}}>Alumno</span><span style={{display:'flex',alignItems:'center'}}>Contacto</span><span style={{display:'flex',alignItems:'center'}}>Plan</span><span style={{display:'flex',alignItems:'center'}}>Estado</span><span style={{display:'flex',alignItems:'center'}}>Vencimiento</span><span></span></div>
       <div style={{display:'grid',maxHeight:480,overflow:'auto'}}>
         {pageStudents.map(s=>{
           const isSel=String(sel)===String(s.id)
-          const nombreCompleto=s.name||'-'; const apellido=s.apellido||''
-          const enfoqueColor={Hipertrofia:'var(--success)',Fuerza:'var(--danger)',Resistencia:'var(--warning)','Definición':'var(--accent-cyan)',Funcional:'var(--info)','Rehabilitación':'var(--accent-violet)'}[s.enfoque]||'var(--accent)'
-          return <div key={s.id} onClick={()=>setSel(s.id)} onDoubleClick={()=>handleOpenDetail(s)} className={isSel?'grid-planificacion alumnos-row sel':'grid-planificacion alumnos-row'} role="row" tabIndex={0} aria-selected={isSel} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(s.id)}}}>
-            <span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)',background:'var(--bg)',padding:'4px 6px',borderRadius:6,justifySelf:'start'}}>{String(s.id).slice(0,6)}</span>
-            <span style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}} onClick={(e)=>{e.stopPropagation(); handleOpenDetail(s)}}><span style={{width:28,height:28,borderRadius:8,background:'var(--selected)',color:'var(--accent)',display:'grid',placeItems:'center',fontWeight:800,fontSize:12,flexShrink:0}}>{nombreCompleto[0]?.toUpperCase()}</span><b style={{fontSize:13,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textDecoration:'underline',textDecorationColor:'var(--accent)'}}>{nombreCompleto}</b></span>
-            <span style={{fontSize:13,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{apellido||'—'}</span>
-            <span style={{display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{background:'var(--bg)',padding:'4px 8px',borderRadius:8,fontSize:12,fontWeight:700}}>{s.edad||'—'}</span></span>
-            <span style={{display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{background:enfoqueColor+'18',color:enfoqueColor,border:`1px solid ${enfoqueColor}30`,padding:'4px 8px',borderRadius:999,fontSize:11,fontWeight:800,whiteSpace:'nowrap'}}>{s.enfoque||'—'}</span></span>
-            <span style={{display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{s.dni||'—'}</span>
-            <span style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'var(--text)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.phone||'—'}</span>
-            <span style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:s.mail||s.email?'var(--accent)':'var(--muted)'}}>{s.mail||s.email||'—'}</span>
-            <span style={{fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:s.observaciones?'var(--text)':'var(--muted)',fontStyle:s.observaciones?'normal':'italic'}} title={s.observaciones||''}>{s.observaciones||'—'}</span>
-            <span style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}}>{s.joinedAt}</span>
+          const nombreCompleto=[s.name,s.apellido].filter(Boolean).join(' ')||'-';
+          const em=emDe(s);
+          const pill=em.estado==='vigente'?['Al día','badge']:em.estado==='por_vencer'?[`Por vencer (${em.dias}d)`,'badge warn']:em.estado==='cancelada'?['Cancelada','badge neutral']:em.estado==='sin_pagos'?['Sin pagos','badge neutral']:['Vencida','badge vencido'];
+          return <div key={s.id} onClick={()=>setSel(s.id)} onDoubleClick={()=>handleOpenDetail(s)} className={isSel?'grid-planificacion alumnos-row sel':'grid-planificacion alumnos-row'} role="row" tabIndex={0} aria-selected={isSel} aria-label={`${nombreCompleto}, ${pill[0]}`} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();setSel(s.id)}}}>
+            <span className="avatar" aria-hidden="true">{(nombreCompleto[0]||'A').toUpperCase()}</span>
+            <span style={{display:'block',minWidth:0,cursor:'pointer'}} onClick={(e)=>{e.stopPropagation(); handleOpenDetail(s)}}><b style={{fontSize:13,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',display:'block',textDecoration:'underline',textDecorationColor:'var(--accent)'}}>{nombreCompleto}</b><small className="muted-text" style={{fontFamily:'monospace'}}>DNI {s.dni||'—'}</small></span>
+            <span style={{fontSize:12,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.phone||'—'}</span>
+            <span style={{fontSize:12,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{em.planNombre||'—'}</span>
+            <span><span className={pill[1]}>{pill[0]}</span></span>
+            <span style={{fontSize:11,color:'var(--muted)',whiteSpace:'nowrap'}}>{em.vencimiento?toDisplay(em.vencimiento):'—'}</span>
+            <span aria-hidden="true" style={{color:'var(--faint)',fontWeight:800}}>›</span>
           </div>
         })}
-        {!students.length&&<Empty text={query?"Sin resultados para la búsqueda.":"No hay alumnos. Registrá el primero con + Nuevo alumno."}/>}
+        {!filtrados.length&&<Empty text={emptyTxt}/>}
       </div>
       </div>
-              {students.length>pageSize&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10,padding:'8px 4px',fontSize:12,color:'var(--muted)'}}><span>Mostrando {(page-1)*pageSize+1}-{Math.min(page*pageSize,students.length)} de {students.length}</span><div style={{display:'flex',gap:8}}><button className="ghost sm" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹ Anterior</button><span style={{alignSelf:'center',fontWeight:700}}>{page} / {totalPages}</span><button className="ghost sm" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Siguiente ›</button></div></div>}
-{selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',border:'1px solid var(--card-border)',borderRadius:8}}>Seleccionado: {selected.name} · Doble click para detalle · EDITAR/ELIMINAR</div>}
+              {filtrados.length>pageSize&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10,padding:'8px 4px',fontSize:12,color:'var(--muted)'}}><span>Mostrando {(page-1)*pageSize+1}-{Math.min(page*pageSize,filtrados.length)} de {filtrados.length}</span><div style={{display:'flex',gap:8}}><button className="ghost sm" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>‹ Anterior</button><span style={{alignSelf:'center',fontWeight:700}}>{page} / {totalPages}</span><button className="ghost sm" disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))}>Siguiente ›</button></div></div>}
+{selected&&<div style={{padding:'8px 12px',fontSize:11,color:'var(--muted)',background:'var(--selected)',border:'1px solid var(--card-border)',borderRadius:8}}>Seleccionado: {selected.name} · Doble click para detalle · Editar/Eliminar</div>}
     </div>
     {edit&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setEdit(null)}}><div className="modal" style={{maxHeight:'90vh',overflow:'auto'}}><div className="modal-head"><h3>Editar Alumno</h3><button onClick={()=>setEdit(null)} aria-label="Cerrar">×</button></div>
       <form onSubmit={saveEdit} onKeyDown={onEnterNext} className="form">
@@ -132,10 +155,10 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
         <label>Mail<input name="mail" type="email" defaultValue={edit.mail||edit.email||''} placeholder="ej@mail.com"/></label>
         <label>Observaciones<textarea name="observaciones" defaultValue={edit.observaciones||''} rows="2" placeholder="Alergias, lesiones, objetivos..." style={{resize:'vertical',border:'1px solid var(--card-border)',background:'var(--input)',color:'var(--text)',borderRadius:10,padding:'10px'}}/></label>
         <label>Fecha de ingreso (DD/MM/AAAA)<input name="fecha" defaultValue={edit.joinedAt||today()} required/></label>
-        <button className="primary wide">GUARDAR CAMBIOS</button>
+        <button className="primary wide">Guardar cambios</button>
       </form>
     </div></div>}
-    {detail&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><div className="modal" style={{width:'min(720px,95vw)',maxHeight:'90vh',overflow:'auto'}}><div className="modal-head"><h3>{detail.name}</h3><button onClick={()=>setDetail(null)} aria-label="Cerrar">×</button></div>
+    {detail&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}><div className="modal" style={{width:'min(720px,95vw)',maxHeight:'90vh',overflow:'auto'}}><div className="modal-head"><h3 style={{display:'flex',alignItems:'center',gap:10}}><span className="avatar" aria-hidden="true">{(detail.name?.[0]||'A').toUpperCase()}</span>{detail.name}{(()=>{ const e=estadoMembresia(detail,{pagos:payments,membresias,planes}); const lbl=e.estado==='vigente'?'Al día':e.estado==='por_vencer'?'Por vencer':e.estado==='cancelada'?'Cancelada':e.estado==='sin_pagos'?'Sin pagos':'Vencida'; const cls=e.estado==='vigente'?'badge':e.estado==='por_vencer'?'badge warn':(e.estado==='sin_pagos'||e.estado==='cancelada')?'badge neutral':'badge vencido'; return <span className={cls}>{lbl}</span> })()}</h3><button onClick={()=>setDetail(null)} aria-label="Cerrar">×</button></div>
       {(()=>{ const pagosAlum=payments.filter(p=>String(p.studentId)===String(detail.id));
         // V44-E: fuente unica de estado/vencimiento (membresia canonica o fallback +30).
         const em=estadoMembresia(detail,{pagos:payments,membresias,planes});

@@ -339,7 +339,7 @@ export default function App(){
     tenantSetJSON('profesores',arr); setModal(null); refresh() }finally{ savingProfesor=false } }
   const saveUsuario=async(e)=>{ e.preventDefault(); const f=new FormData(e.currentTarget); const data={usuario:f.get('usuario'), clave:f.get('clave'), rol:f.get('rol')||'Empleado'}; await api.crearUsuario(data,{operationId:newOperationId()}); setModal(null); refresh() }
 
-  const filtered=useMemo(()=> students.filter(s=>`${s.name} ${s.dni}`.toLowerCase().includes(query.toLowerCase())), [students,query])
+  const filtered=useMemo(()=> students.filter(s=>`${s.name} ${s.apellido||''} ${s.dni} ${s.phone||''}`.toLowerCase().includes(query.toLowerCase())), [students,query])
   const handleDeleteAlumno=async(id)=>{ if(!confirm('¿Eliminar alumno?')) return; const _sid=String(id??'').trim(); try{ if(/^\d+$/.test(_sid)) await api.eliminarAlumno(_sid,{operationId:newOperationId()}); else await remove('students',id) }catch{ await remove('students',id) } refresh() }
 
   const [gymConf,setGymConf]=useState(null)
