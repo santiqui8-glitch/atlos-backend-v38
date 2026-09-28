@@ -2,17 +2,19 @@
 // para feedback inmediato; el backend es autoridad. Offline: solo se muestra
 // permitido con datos locales suficientes; si no, rechazado 'no-identificado'.
 // Cola tipos acceso-entrada/acceso-salida (E-05: mismo motor, sin segunda cola).
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { api, queuePush, esErrorDeRed, newOperationId } from '../services/api'
 import { list } from '../services/db'
+import { useCalendario } from '../services/calendario.js'
 import useClock from '../hooks/useClock.js'
 import { today, toDisplay, onEnterNext } from '../utils/helpers.js'
 import { estadoMembresia } from '../utils/membresia.js'
-import { buscarAlumnoAcceso, prevalidarAcceso, MOTIVOS_ACCESO } from '../utils/acceso.js'
+import { toCSV, descargarCSV } from '../utils/export.js'
+import { buscarAlumnoAcceso, prevalidarAcceso, resumenAccesos, MOTIVOS_ACCESO } from '../utils/acceso.js'
 import { Empty, PanelTitle } from '../components/ui.jsx'
 
 
-export default function VistaAcceso({ students, payments = [], membresias = [], planes = [] }) {
+export default function VistaAcceso({ students, payments = [], membresias = [], planes = [], clases = [] }) {
   const now = useClock()
   const [modo, setModo] = useState('entrada')
   const [texto, setTexto] = useState('')
@@ -23,6 +25,12 @@ export default function VistaAcceso({ students, payments = [], membresias = [], 
   const [fTipo, setFTipo] = useState('')
   const [fQ, setFQ] = useState('')
   const inputRef = useRef(null)
+
+  // V44-J: calendario del día actual (grilla semanal) + resumen operativo de
+  // accesos REALES del historial (R2: no se usa asistencias:[] — los contadores
+  // salen de las filas que la tabla ya muestr)
+  const { diasSemana } = useCalendario({ clases });
+  const resumen = useMemo(() => resumenAccesos(hist), [hist]);
 
   const fetchHist = async () => {
     try {
@@ -100,11 +108,29 @@ export default function VistaAcceso({ students, payments = [], membresias = [], 
       {res.motivo ? <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700 }}>{MOTIVOS_ACCESO[res.motivo] || res.motivo}</div> : null}
       {res.pendiente && <div className="muted-text" style={{ marginTop: 4, fontSize: 11 }}>Pendiente de sincronizar (offline)</div>}
     </div>}
-    <section className="panel" style={{ marginTop: 14 }}><PanelTitle title="Historial de hoy" />
+    <section className="panel" style={{ marginTop: 14 }}><PanelTitle title="Accesos de hoy" action={<span className="muted-text" style={{ fontVariantNumeric: 'tabular-nums' }}>{resumen.entradas} entradas · {resumen.salidas} salidas · {resumen.dentro} dentro</span>} />
+        <div className="rows">
+          <div className="row"><div className="miniavatar">→</div><div className="grow"><b>Entradas</b><span>check-ins registrados hoy</span></div><strong>{resumen.entradas}</strong></div>
+          <div className="row"><div className="miniavatar green">●</div><div className="grow"><b>Actualmente dentro</b><span>sin salida registrada</span></div><strong>{resumen.dentro}</strong></div>
+          <div className="row"><div className="miniavatar">←</div><div className="grow"><b>Salidas</b><span>check-outs registrados hoy</span></div><strong>{resumen.salidas}</strong></div>
+        </div>
+      </section>
+      <section className="panel" style={{ marginTop: 14 }}><PanelTitle title="Calendario semanal" />
+        <div className="cal-grid" role="list">
+          {diasSemana.map((d) => (
+            <div key={d.fechaISO} className={d.esHoy ? 'cal-day today' : 'cal-day'} role="listitem" aria-label={`${d.fecha} — ${d.total} clases`}>
+              <b>{d.fecha}</b>
+              <span className="muted-text">{d.total} clases</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="panel" style={{ marginTop: 14 }}><PanelTitle title="Historial de hoy" />
       <div className="toolbar">
         <select className="field" style={{ maxWidth: 150 }} aria-label="Resultado" value={fRes} onChange={e => setFRes(e.target.value)}><option value="">Permit./Rech.</option><option value="permitido">Permitidos</option><option value="rechazado">Rechazados</option></select>
         <select className="field" style={{ maxWidth: 140 }} aria-label="Tipo" value={fTipo} onChange={e => setFTipo(e.target.value)}><option value="">Entr./Sal.</option><option value="entrada">Entradas</option><option value="salida">Salidas</option></select>
         <div className="search-wrap"><input className="field-search" aria-label="Buscar en historial" placeholder="🔎 Buscar..." value={fQ} onChange={e => setFQ(e.target.value)} /></div>
+        <button className="ghost sm" title="Descargar CSV del historial filtrado" onClick={() => descargarCSV(`accesos-${today()}.csv`, toCSV(filtrados, [{ key: 'fecha', label: 'Fecha' }, { key: 'hora', label: 'Hora' }, { key: 'alumno_nombre', label: 'Alumno', get: (h) => h.alumno_nombre || h.identificador || '' }, { key: 'tipo', label: 'Tipo' }, { key: 'resultado', label: 'Resultado' }, { key: 'motivo', label: 'Motivo', get: (h) => MOTIVOS_ACCESO[h.motivo] || h.motivo || '' }, { key: 'metodo', label: 'Método' }]))}>⤓ CSV</button>
       </div>
       <div className="table" style={{ marginTop: 0, overflow: 'hidden' }}>
         <div className="thead gestion"><span>Hora</span><span>Alumno</span><span>Tipo</span><span>Resultado</span><span>Motivo</span><span>Método</span></div>

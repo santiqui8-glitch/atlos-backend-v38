@@ -3,6 +3,7 @@ import { api, queuePush, esErrorDeRed, readTenantQueue, writeTenantQueue, sameQu
 import { pushDeletedId } from '../services/tenant'
 import { put, remove } from '../services/db'
 import { money, toISO, toDisplay, onEnterNext, isSameMonth, today, parseFecha } from '../utils/helpers.js'
+import { toCSV, descargarCSV } from '../utils/export.js'
 import { estadoMembresia } from '../utils/membresia.js'
 import { Empty } from '../components/ui.jsx'
 
@@ -94,6 +95,7 @@ export default function VistaGestion({payments,students,stats,rol,planes=[],memb
     </div>
     <div className="toolbar">
       <div className="search-wrap"><input className="field-search" aria-label="Buscar pago" placeholder="🔎 Buscar alumno por nombre, concepto o método..." value={q} onChange={e=>{setQ(e.target.value); setVisibles(PAGE_SIZE)}}/></div>
+      <button className="ghost sm" title="Descargar CSV de la lista filtrada" onClick={()=>{ const rows=filtrados.map(p=>{ const s=students.find(x=>String(x.id)===String(p.studentId)); return {fecha:p.date||'',alumno:s?.name||p.alumnoNombre||'',concepto:p.note||'',monto:p.amount||0,metodo:p.metodo||''} }); descargarCSV(`pagos-${today()}.csv`,toCSV(rows,[{key:'fecha',label:'Fecha'},{key:'alumno',label:'Alumno'},{key:'concepto',label:'Concepto'},{key:'monto',label:'Monto'},{key:'metodo',label:'Método'}])) }}>⤓ CSV</button>
     </div>
     <div className="table" style={{marginTop:0,overflow:'hidden'}}>
       <div className="thead gestion"><span>ID</span><span>Fecha</span><span>Alumno</span><span>Concepto</span><span>Monto ($)</span><span>Medio de Pago</span></div>

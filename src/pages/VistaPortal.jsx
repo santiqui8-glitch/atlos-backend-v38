@@ -2,7 +2,7 @@
 // clave. Todos los endpoints son own-only por JWT (backend autoridad); el
 // frontend JAMAS pide datos ajenos. Reutiliza estadoMembresia() y clases CSS.
 import { useState, useEffect } from 'react'
-import { api, getUserId } from '../services/api'
+import { api, getUserId, queuePush, esErrorDeRed, newOperationId } from '../services/api'
 import { list } from '../services/db'
 import { estadoMembresia } from '../utils/membresia.js'
 import { money, toDisplay, onEnterNext } from '../utils/helpers.js'
@@ -58,6 +58,34 @@ export default function VistaPortal({ usuario, students = [], payments = [], mem
     })();
     return () => { vivo = false };
   }, [tab]);
+
+  const recargarInsc = async (cid) => {
+    try {
+      const rows = await api.claseAlumnos(cid);
+      if (Array.isArray(rows)) setInsc((prev) => ({ ...prev, [String(cid)]: rows.some((a) => String(a.id) === String(uid)) }));
+    } catch {}
+  };
+  // V44-J: reserva/cancelacion propia (own-only en backend). Offline: queue
+  // existente, sin fingir confirmacion (se marca pendiente hasta sincronizar).
+  const cambiarReserva = async (c, cancelar) => {
+    if (!uid) return alert('Sin alumno identificado.');
+    const opId = newOperationId();
+    try {
+      if (cancelar) {
+        if (!confirm(`¿Cancelar tu reserva en "${c.nombre || c.name}"?`)) return;
+        await api.cancelarInscripcion(c.id, uid, { operationId: opId });
+      } else {
+        await api.crearInscripcion({ clase_id: c.id, alumno_id: /^\d+$/.test(String(uid)) ? Number(uid) : uid }, { operationId: opId });
+      }
+      await recargarInsc(c.id);
+    } catch (e) {
+      console.warn('reserva fallo', e.message);
+      if (esErrorDeRed(e)) {
+        queuePush(cancelar ? 'cancelarInscripcion' : 'inscribir', cancelar ? { clase_id: c.id, alumno_id: uid } : { clase_id: c.id, alumno_id: uid, _localId: 'insc-' + Date.now() }, { operationId: opId });
+        alert('Sin conexión: quedó en cola para sincronizar.');
+      } else alert('No se pudo completar: ' + e.message);
+    }
+  };
 
   const misPagos = payments.filter((p) => String(p.studentId) === String(uid));
   const misAsist = attendance.filter((a) => String(a.studentId) === String(uid)).slice().reverse();
@@ -132,7 +160,12 @@ export default function VistaPortal({ usuario, students = [], payments = [], mem
 
     {tab === 'clases' && <section className="panel"><PanelTitle title="Mis clases" />
       {!clases.length ? <Empty text="No hay clases publicadas." /> :
-        <div className="rows">{clases.map((c) => <div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre || c.name}</b><span>{c.dia_mes || c.dia || ''} · {c.hora_inicio || c.inicio || ''}{c.profesor ? ` · ${c.profesor}` : ''}</span></div>{insc[String(c.id)] === true ? <span className="badge">Inscripto</span> : null}</div>)}</div>}
+        <div className="rows">{clases.map((c) => {
+          const esta = insc[String(c.id)] === true;
+          const cap = Number(c.capacidad ?? c.cap);
+          const llena = cap > 0 && Number(c.inscriptos || c.inscriptos_count || 0) >= cap;
+          return <div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre || c.name}</b><span>{c.dia_mes || c.dia || ''} · {c.hora_inicio || c.inicio || ''}{c.profesor ? ` · ${c.profesor}` : ''}{Number.isFinite(cap) && cap > 0 ? ` · ${c.inscriptos || c.inscriptos_count || 0}/${cap}` : ''}</span></div>{esta ? <><span className="badge">Inscripto</span><button className="ghost sm" onClick={() => cambiarReserva(c, true)}>Cancelar</button></> : <button className="ghost sm" disabled={llena} title={llena ? 'Clase completa' : 'Reservar lugar'} onClick={() => cambiarReserva(c, false)}>{llena ? 'Completa' : 'Reservar'}</button>}</div>
+        })}</div>}
     </section>}
 
     {tab === 'perfil' && <div style={{ display: 'grid', gap: 12 }}>

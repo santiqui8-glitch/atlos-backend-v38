@@ -66,6 +66,8 @@ export function sanitizeQueue() {
     if (item.type === 'cierre') return !(pl.fecha && String(pl.fecha).trim())
     // V44-H: solo diagnostico (warn + conteo, igual que el resto).
     if (item.type === 'acceso-entrada' || item.type === 'acceso-salida') return !(pl.alumno_id ?? pl.dni)
+    // V44-J: solo diagnostico (warn + conteo, igual que el resto).
+    if (item.type === 'inscribir' || item.type === 'cancelarInscripcion') return !(pl.clase_id ?? null) || !(pl.alumno_id ?? null)
     return false
   }
   let flagged = 0

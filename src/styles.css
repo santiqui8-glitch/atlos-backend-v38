@@ -298,6 +298,12 @@ textarea.field{height:auto;min-height:74px;resize:vertical}
 .portal-logo{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.15);object-fit:contain;flex:none}
 .portal-aviso{border:1px solid var(--warning);background:rgba(178,106,0,.1);color:var(--text);border-radius:var(--radius-md);padding:10px 14px;font-size:13px;font-weight:600}
 .portal-wrap .tabs{flex-wrap:wrap;row-gap:6px}
+/* V44-J: calendario semanal del portal */
+.cal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.cal-day{border:1px solid var(--card-border);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.cal-day b{font-size:13px;color:var(--text)}
+.cal-day.today{border-color:var(--accent);background:rgba(27,150,236,.06)}
+.cal-day.today b{color:var(--accent)}
 /* V44-D-06: terminal de asistencia — full-bleed dentro del main + 2 columnas. */
 .kiosk-bleed{margin:-26px -28px -56px;padding:26px 28px 40px;min-height:calc(100vh - 60px);background:transparent}
 .cols-main-side{display:grid;grid-template-columns:1.65fr 1fr;gap:14px;align-items:start}

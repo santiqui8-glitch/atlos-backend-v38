@@ -105,6 +105,9 @@ export const api={
   eliminarClase:(id,opts)=>request(`/clases/${id}`,{method:'DELETE',...(opts||{})}),
   claseAlumnos:(id)=>request(`/clases/${id}/alumnos`),
   inscribirClase:(clase_id,alumno_id,opts)=>request(`/clases/${clase_id}/inscribir`,{method:'POST',body:{alumno_id},...(opts||{})}),
+  // V44-J: reservas (canonica POST /inscripciones + cancelacion idempotente).
+  crearInscripcion:(data,opts)=>request('/inscripciones',{method:'POST',body:data,...(opts||{})}),
+  cancelarInscripcion:(clase_id,alumno_id,opts)=>request(`/inscripciones?clase_id=${encodeURIComponent(clase_id)}&alumno_id=${encodeURIComponent(alumno_id)}`,{method:'DELETE',...(opts||{})}),
   cuotas:(params)=>request('/cuotas'+(params?`?${new URLSearchParams(params)}`:'')),
   // V44-G: caja (mismo patron: opts acarrea operationId).
   movimientos:(params)=>request('/movimientos'+(params?`?${new URLSearchParams(params)}`:'')),
@@ -159,6 +162,40 @@ export function clearAuth(){ localStorage.removeItem('atlos-token'); localStorag
 export function isTokenValid(){ try{ const tok=getToken(); if(!tok) return false; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return false; return true }catch{ return false } }
 export function getRole(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.rol||p.role||null; }catch{ return null } }
 export function getUserId(){ try{ const tok=getToken(); if(!tok) return null; const p=JSON.parse(atob(tok.split('.')[1]||'')); if(p.exp && Date.now()/1000 > p.exp) return null; return p.user_id??p.usuario_id??p.sub??null }catch{ return null } }
+
+// ---------------------------------------------------------------------------
+// V44-J · ADMIN ATLOS SIN HWID / SIN LICENCIA
+// ---------------------------------------------------------------------------
+// DATO REAL (no inventado). El backend define el superadmin global por el
+// TENANT del token, nunca por el nombre del rol:
+//   api.py create_token()      -> payload {..., "gym_id": gym_id, "rol": rol}
+//   api.py require_superadmin -> "Superadmin = usuario global sin gym
+//                                 (gym_id NULL). Unico con alcance global."
+//   api.py login()            -> create_token(..., user.get("gym_id"))
+// Por lo tanto:
+//   gym_id === null  -> superadmin global de ATLOS (sin gym que licenciar)
+//   gym_id === <id>  -> usuario de un gimnasio (Dueño/Administrador/Empleado/Alumno)
+// NO se compara el ROL: 'Dueño' y 'Administrador' son administradores DE GIMNASIO
+// (ADMIN_ROLES en api.py) y deben seguir pasando por GymGate + licencia.
+function decodeClaimsATLOS(){
+  try{
+    const tok=getToken();
+    if(!tok) return null;
+    const p=JSON.parse(atob(tok.split('.')[1]||''));
+    if(!p||typeof p!=='object') return null;
+    if(p.exp && Date.now()/1000 > p.exp) return null;
+    return p;
+  }catch{ return null }
+}
+// true SOLO con token vigente y claim `gym_id` PRESENTE y explicitamente null.
+// Fail-closed: sin token, con token vencido, malformado o SIN el claim -> false
+// (el backend resuelve esos casos server-side; no loscolas como superadmin).
+export function esSuperadminATLOS(){
+  const p=decodeClaimsATLOS();
+  if(!p) return false;
+  if(!Object.prototype.hasOwnProperty.call(p,'gym_id')) return false;
+  return p.gym_id===null||p.gym_id===undefined;
+}
 // BLOQUE 4C: mutex simple + registro de push durante flush (sin cambiar formato de atlos-queue).
 let flushing=false;
 let pushDuringFlush=false;
@@ -605,6 +642,9 @@ export async function flushQueue(){
       // rechazos; idempotencia por operationId).
       else if(item.type==='acceso-entrada'){ const {...ab}=(item.payload||{}); delete ab._localId; await api.accesoEntrada(ab,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else if(item.type==='acceso-salida'){ const {...sb}=(item.payload||{}); delete sb._localId; await api.accesoSalida(sb,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      // V44-J: reservas offline (misma idempotencia; el servidor valida todo).
+      else if(item.type==='inscribir'){ const {...ib}=(item.payload||{}); delete ib._localId; await api.crearInscripcion(ib,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
+      else if(item.type==='cancelarInscripcion'){ await api.cancelarInscripcion(item.payload.clase_id,item.payload.alumno_id,{...FLUSH_OPTS, operationId:item&&item.operationId}); }
       else remain.push(item);
     }catch(e){
       const _pl=item.payload||{};

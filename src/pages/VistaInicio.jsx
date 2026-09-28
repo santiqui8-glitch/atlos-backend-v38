@@ -2,6 +2,7 @@ import React from 'react'
 import useClock from '../hooks/useClock.js'
 import { PanelTitle, Empty } from '../components/ui.jsx'
 import { money } from '../utils/helpers.js'
+import { resumenAccesos } from '../utils/acceso.js'
 
 // V43-03: reloj+calendario aislados para que el tick (1/s) no re-renderice el Dashboard.
 function ClockCalendar(){
@@ -17,8 +18,10 @@ function ClockCalendar(){
   </>
 }
 
-export default function VistaInicio({stats,clases,usuario,onNavigate}){
+export default function VistaInicio({stats,clases,usuario,accesosHoy=[],onNavigate}){
   const goKey=(e,id)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); onNavigate(id) } }
+  // V44-J: resumen operativo del dia (misma fuente que el historial).
+  const acc=resumenAccesos(accesosHoy);
   return <>
     <section className="hero"><div><span className="eyebrow">ATLOS · Panel principal</span><h2>Hola, <em>{usuario}</em></h2><p>Así está tu gimnasio hoy: alumnos, asistencia, ingresos y actividad reciente en un solo lugar.</p></div><img src="/logo.png" alt="ATLOS" width="256" height="175" className="hero-badge-img" onError={e=>e.currentTarget.style.display='none'}/></section>
     <div className="cards">
@@ -39,6 +42,12 @@ export default function VistaInicio({stats,clases,usuario,onNavigate}){
         </div></section>
       </div>
       <section className="panel"><PanelTitle title="Clases del día"/><div className="rows">{clases.length?clases.slice(0,6).map(c=><div className="row" key={c.id}><div className="miniavatar">🗓</div><div className="grow"><b>{c.nombre||c.name}</b><span>{c.dia_mes||c.dia} · {c.hora_inicio||c.inicio}–{c.hora_fin||c.fin} {c.profesor?`· ${c.profesor}`:''}</span></div><span className="badge">{c.capacidad||'-'} cap</span></div>):<Empty text="No hay clases cargadas. Creá una en Clases."/>}</div></section>
+      <section className="panel"><PanelTitle title="Accesos de hoy"/><div className="rows">
+        <div className="row"><div className="miniavatar">→</div><div className="grow"><b>Entradas</b></div><strong>{acc.entradas}</strong></div>
+        <div className="row"><div className="miniavatar">←</div><div className="grow"><b>Salidas</b></div><strong>{acc.salidas}</strong></div>
+        <div className="row"><div className="miniavatar">✕</div><div className="grow"><b>Rechazados</b></div><strong>{acc.rechazados}</strong></div>
+        <div className="row"><div className="miniavatar green">●</div><div className="grow"><b>Dentro ahora</b><span>{acc.dentro.length?acc.dentro.slice(0,5).map(d=>d.alumno_nombre||('ID '+d.alumno_id)).join(', ')+(acc.dentro.length>5?` +${acc.dentro.length-5} más`:''):'—'}</span></div><strong>{acc.dentro.length}</strong></div>
+      </div></section>
     </div>
   </>
 }

@@ -31,6 +31,32 @@ export function prevalidarAcceso(alumno, { pagos = [], membresias = [], planes =
   return { permitido: false, motivo, em };
 }
 
+// V44-J: resumen operativo de accesos de un dia (misma fuente que la tabla).
+// "Dentro": ultimo evento del alumno = entrada permitida sin salida posterior.
+export function resumenAccesos(rows) {
+  let entradas = 0, salidas = 0, rechazados = 0;
+  let ultimo = null;
+  const porAlumno = new Map();
+  for (const r of rows || []) {
+    if (r?.tipo === 'entrada' && r?.resultado === 'permitido') entradas++;
+    else if (r?.tipo === 'salida' && r?.resultado === 'permitido') salidas++;
+    if (r?.resultado === 'rechazado') rechazados++;
+    const k = r?.alumno_id != null ? String(r.alumno_id) : null;
+    if (k) {
+      const prev = porAlumno.get(k);
+      const t = `${r?.fecha || ''} ${r?.hora || ''} #${r?.id ?? ''}`;
+      if (!prev || t >= prev.t) porAlumno.set(k, { t, r });
+    }
+    const rt = `${r?.fecha || ''} ${r?.hora || ''} #${r?.id ?? ''}`;
+    if (!ultimo || rt >= ultimo.t) ultimo = { t: rt, r };
+  }
+  const dentro = [];
+  for (const [, v] of porAlumno) {
+    if (v.r?.tipo === 'entrada' && v.r?.resultado === 'permitido') dentro.push(v.r);
+  }
+  return { entradas, salidas, rechazados, ultimo: ultimo ? ultimo.r : null, dentro };
+}
+
 export const MOTIVOS_ACCESO = {
   '': '',
   'alumno-no-encontrado': 'Alumno no encontrado',

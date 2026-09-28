@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useReducer, Suspense, lazy } from 'react'
 import { list, put, remove, seed } from './services/db'
-import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esErrorDeRed, startSession, adoptOwnQueueItems, newOperationId } from './services/api'
+import { api, setToken, getRole, clearAuth, isTokenValid, queuePush, getGymHWID, esSuperadminATLOS, esErrorDeRed, startSession, adoptOwnQueueItems, newOperationId } from './services/api'
 import { startSync, stopSync } from './services/sync'
 import { tenantGetJSON, tenantSetJSON, clearTenantEntityData, getCurrentTenant, removeDeletedId } from './services/tenant'
 import { today, fmtHoy, parseFecha, toISO, toDisplay, isSameMonth } from './utils/helpers.js'
@@ -62,6 +62,7 @@ export default function App(){
   // V44-E: catalogo comercial + membresias (refresh los puebla, IDB de respaldo).
   const [planes,setPlanes]=useState([])
   const [membresias,setMembresias]=useState([])
+  const [accesosHoy,setAccesosHoy]=useState([])
   const [online,setOnline]=useState(navigator.onLine)
   const [modal,setModal]=useState(null)
   const [renewAlumno,setRenewAlumno]=useState(null)
@@ -98,7 +99,7 @@ export default function App(){
     refreshing=true;
     const ctxTenant=getCurrentTenant();
     try{
-      const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw,plRaw,mbRaw]=await Promise.all([
+      const [sRaw,pRaw,aRaw,rRaw,cRaw,eRaw,dRaw,uRaw,profsRaw,plRaw,mbRaw,accRaw]=await Promise.all([
         api.alumnos().catch(err=>{ console.warn('[refresh]','alumnos',err?.message||err); return null }),
         api.pagos().catch(err=>{ console.warn('[refresh]','pagos',err?.message||err); return null }),
         api.asistencia().catch(err=>{ console.warn('[refresh]','asistencia',err?.message||err); return null }),
@@ -110,6 +111,8 @@ export default function App(){
         api.profesores().catch(err=>{ console.warn('[refresh]','profesores',err?.message||err); return null }),
         api.planes().catch(err=>{ console.warn('[refresh]','planes',err?.message||err); return null }),
         api.membresias().catch(err=>{ console.warn('[refresh]','membresias',err?.message||err); return null }),
+        // V44-J: accesos de hoy para el dashboard (1 request; offline -> IDB).
+        api.accesos({desde:today(),hasta:today()}).catch(err=>{ console.warn('[refresh]','accesos',err?.message||err); return null }),
       ])
       const localS=await list('students'); const localP=await list('payments'); const localA=await list('attendance'); const localR=await list('routines')
       const sCloud=Array.isArray(sRaw)?sRaw.map(j=>({id:String(j.id),name:j.nombre||j.name||'Sin nombre',dni:j.dni||j.telefono||'',phone:j.telefono||j.phone||'',joinedAt:j.fecha_ingreso||j.joinedAt||today(),status:j.status||'activo',edad:j.edad||null,email:j.email||'', experience:j.experience||'principiante', goal:j.goal||j.enfoque||'hipertrofia', days_per_week:j.days_per_week||3, notes:j.notes||''})):null
@@ -195,13 +198,19 @@ export default function App(){
         mbs=Array.from(new Map([...mbRaw.map(m=>({...m,id:String(m.id)})),...locales].map(x=>[String(x.id),x])).values());
       } else mbs=localMb;
       mbs=mbs.filter(x=>!delMembs.has(String(x.id)));
+      // V44-J: accesos de hoy (server o IDB local; solo fecha de hoy).
+      const hoyISO=today();
+      let accHoy=[];
+      if(Array.isArray(accRaw)) accHoy=accRaw;
+      else { try{ accHoy=(await list('accesos')).filter(x=>String(x.fecha||'').slice(0,10)===hoyISO) }catch{ accHoy=[] } }
+      accHoy=accHoy.filter(x=>String(x.fecha||'').slice(0,10)===hoyISO);
       // V39-11B: fail-closed — el estado solo se actualiza para el tenant que inició el refresh.
       if(getCurrentTenant()!==ctxTenant) return;
       if(!s.length){
         // no reseed demo si el usuario ya borró alumnos (los 3 demo Juan/Sofía/Martín volvían siempre)
         if(import.meta.env.DEV && delAlumnos.size===0){ await seed(); const seeded=await list('students'); const filteredSeeded=seeded.filter(x=>!delAlumnos.has(String(x.id))); setStudents(filteredSeeded) } else { setStudents([]) }
       } else setStudents(s)
-      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); setPlanes(pls); setMembresias(mbs); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
+      setPayments(p); setAttendance(a); setRoutines(r); setClases(c); setEjercicios(prev=> e ?? prev); setProfesores(profs); setPlanes(pls); setMembresias(mbs); setAccesosHoy(accHoy); if(dRaw) setDashboard(dRaw); if(Array.isArray(uRaw)) setUsuarios(uRaw)
       return
     }catch(e){ console.error('refresh',e); return }
     finally{ refreshing=false }
@@ -357,7 +366,12 @@ export default function App(){
     }).catch(e=>{ const msg=String(e.message||''); if(msg.includes('No autorizado')||msg.includes('expirada')||msg.includes('401')||msg.includes('403')){ clearAuth(); setLogged(false) } })
     api.getGymConfig().then(cfg=>{ if(cfg && typeof cfg==='object'){ setGymConf(cfg); tenantSetJSON('gymconf',cfg) } }).catch(()=>{ const local=tenantGetJSON('gymconf',null); if(local) setGymConf(local) })
   } },[preview])
-  useEffect(()=>{ if(!logged) return; const checkLic=async()=>{ try{ const lic=await api.checkLicencia(); setLicencia(lic); if(!lic.activo){ console.warn('Licencia vencida',lic) } }catch{} }; checkLic(); const t=setInterval(checkLic, 5*60*1000); return ()=>clearInterval(t) },[logged])
+  useEffect(()=>{ if(!logged) return;
+    // V44-J: el superadmin global no pertenece a ningun gym (gym_id NULL), asi que
+    // no existe licencia de gimnasio que evaluar. No se sondea /licencias/check.
+    // Para cualquier usuario de gimnasio el flujo queda intacto.
+    if(esSuperadminATLOS()){ setLicencia(null); return }
+    const checkLic=async()=>{ try{ const lic=await api.checkLicencia(); setLicencia(lic); if(!lic.activo){ console.warn('Licencia vencida',lic) } }catch{} }; checkLic(); const t=setInterval(checkLic, 5*60*1000); return ()=>clearInterval(t) },[logged])
   // FIX BLUE SCREEN: estos hooks deben correr en TODOS los renders, antes de
   // cualquier early return (Rules of Hooks). Contenido 100% intacto.
   const notifs=useMemo(()=>{
@@ -385,15 +399,40 @@ export default function App(){
     const seen=new Set(); return arr.filter(n=>{ if(seen.has(n.id)) return false; seen.add(n.id); return true }).slice(0,20)
   },[students,payments,attendance,membresias,planes])
   const [showNotifs,setShowNotifs]=useState(false)
-  if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol) && !DEV_PREVIEW){
+  // V44-J: permite reached la pantalla de Login SIN GymGate para el admin de
+  // ATLOS. No guarda ningun HWID ni licencia: el bypass real se decide DESPUES
+  // de autenticar, leyendo gym_id del JWT (ver esSuperadminATLOS).
+  const [accesoAdmin,setAccesoAdmin]=useState(false)
+  if(logged && licencia && !licencia.activo && !['Dueño','Administrador'].includes(rol) && !esSuperadminATLOS() && !DEV_PREVIEW){
     return <div className="overlay" style={{background:'rgba(15,23,42,.96)',backdropFilter:'blur(6px)'}}><div className="modal" style={{textAlign:'center',maxWidth:460}}><div style={{fontSize:40}}>🔴</div><h3>Licencia vencida</h3><p style={{color:'var(--muted)',fontSize:13}}>Gimnasio <b>{licencia.gym_name||licencia.hwid}</b> — <code>{licencia.hwid}</code><br/>Venció el <b>{toDisplay(licencia.vence)}</b> — {licencia.dias_restantes} días restantes<br/>Todas las PCs con este código quedan bloqueadas.</p><p style={{fontSize:12,color:'var(--muted)'}}>Pedile al Dueño que entre a <b>Licencias</b> y renueve. Multi-PC con mismo <code>HWID</code>.</p><div style={{display:'flex',gap:8,marginTop:14}}><button className="primary" style={{flex:1}} onClick={()=>{ clearTenantEntityData(); clearAuth(); setLogged(false); setLicencia(null)}}>Cerrar sesión</button></div></div></div>
   }
   // DEV PREVIEW ONLY — botón de entrada al shell visual, solo en desarrollo.
   const previewBtn=DEV_PREVIEW?<button type="button" className="ghost" style={{position:'fixed',bottom:16,right:16,zIndex:50}} onClick={enterPreview}>👁 Entrar en modo preview</button>:null;
   if(!logged){
     const gymHwid=getGymHWID();
-    if(!gymHwid) return <>{previewBtn}<GymGate onOk={force}/></>;
-    return <>{previewBtn}<Login onChangeGym={force} onLogin={async (u,p)=>{ try{ const r=await api.login(u,p); if(!r || (!r.token && !r.access_token)) return 'Respuesta inválida del servidor'; const tok=r.token||r.access_token; setToken(tok); const r2=await api.me().catch(()=>null); const rolResp=r2?.rol||r.rol||r.role||getRole()||'Dueño'; const usu=r2?.usuario||r.usuario||r.nombre||r.user||u; localStorage.setItem('atlos-session','1'); localStorage.setItem('atlos-usuario',usu); localStorage.setItem('atlos-rol',rolResp); setUsuario(usu); setRol(rolResp); startSession(); adoptOwnQueueItems(); setLogged(true); return null; }catch(e){ return e.message } }}/></>
+    // V44-J · BYPASS DE GYMGATE
+    // Condicion UNICA que lo activa: token vigente cuyo claim `gym_id` del JWT
+    // es null (superadmin global de ATLOS). Nunca el nombre del rol.
+    // GymGate NO se elimina: sigue siendo la pantalla para toda PC sin activar.
+    const adminATLOS=esSuperadminATLOS();
+    const toggleAcceso=(
+      <button type="button" className="ghost" onClick={()=>setAccesoAdmin(v=>!v)}
+        style={{position:'fixed',bottom:60,right:16,zIndex:51}}>
+        {accesoAdmin?'◀ Volver a activar el gimnasio':'¿Sos administrador de ATLOS? Entrá con tu cuenta'}
+      </button>
+    );
+    const login=(
+      <Login onChangeGym={force} onLogin={async (u,p)=>{ try{ const r=await api.login(u,p); if(!r || (!r.token && !r.access_token)) return 'Respuesta inválida del servidor'; const tok=r.token||r.access_token; setToken(tok);
+        // Fail-closed: en una PC sin HWID de gym solo entra el superadmin global.
+        // Cualquier otro usuario debe activar la PC con el codigo de su gimnasio.
+        if(!getGymHWID() && !esSuperadminATLOS()){ clearAuth(); return 'Esta PC todavía no está activada. Ingresá el código de tu gimnasio.' }
+        const r2=await api.me().catch(()=>null); const rolResp=r2?.rol||r.rol||r.role||getRole()||'Dueño'; const usu=r2?.usuario||r.usuario||r.nombre||r.user||u; localStorage.setItem('atlos-session','1'); localStorage.setItem('atlos-usuario',usu); localStorage.setItem('atlos-rol',rolResp); setUsuario(usu); setRol(rolResp); startSession(); adoptOwnQueueItems(); setLogged(true); return null; }catch(e){ return e.message } }}/>
+    );
+    if(!gymHwid && !adminATLOS){
+      if(!accesoAdmin) return <>{previewBtn}<GymGate onOk={force}/>{toggleAcceso}</>;
+      return <>{previewBtn}{login}{toggleAcceso}</>;
+    }
+    return <>{previewBtn}{login}</>;
   }
   // V44-I: portal del alumno (rol Alumno). Shell separado: sin nav admin,
   // sin datos ajenos (el backend ya devuelve scope propio por JWT).
@@ -425,13 +464,13 @@ export default function App(){
         </div>
         <div className="sync">{online?'Sincronizado':'Guardando local'}</div><button className="logout-btn" title="Cerrar sesión" onClick={()=>{clearTenantEntityData(); clearAuth(); setLogged(false); setPreview(false); setUsuario('admin'); setRol('Dueño')}}>Cerrar sesión</button></div></header>
       <Suspense fallback={<div style={{padding:20,minHeight:400,textAlign:'center',color:'var(--muted)',fontSize:12}}>Cargando...</div>}>
-      {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} onNavigate={setPage}/>}
+      {page==='inicio'&&<VistaInicio stats={stats} clases={clases} usuario={usuario} accesosHoy={accesosHoy} onNavigate={setPage}/>}
       {page==='gestion'&&<VistaGestion payments={payments} students={students} stats={stats} rol={rol} planes={planes} membresias={membresias} onNew={()=>setModal('payment')} refresh={refresh}/>}
       {page==='caja'&&<VistaCaja rol={rol}/>}
       {page==='reportes'&&<VistaReportes payments={payments} students={students} clases={clases} ejercicios={ejercicios} attendance={attendance} dashboard={dashboard}/>}
       {page==='planificacion'&&<VistaPlanificacion students={filtered} query={query} setQuery={setQuery} stats={stats} payments={payments} attendance={attendance} routines={routines} planes={planes} membresias={membresias} onNew={()=>setModal('student')} onRenew={(alumno)=>{ setRenewAlumno(String(alumno.id)); setModal('payment') }} refresh={refresh}/>}
       {page==='asistencia'&&<VistaAsistencia students={students} attendance={attendance} payments={payments} membresias={membresias} query={query} setQuery={setQuery} onCheckin={markAttendanceDNI} refresh={refresh}/>}
-      {page==='acceso'&&<VistaAcceso students={students} payments={payments} membresias={membresias} planes={planes}/>}
+      {page==='acceso'&&<VistaAcceso students={students} payments={payments} membresias={membresias} planes={planes} clases={clases}/>}
       {page==='turnos'&&<VistaClases clases={clases} students={students} profesores={profesores} onNew={()=>setModal('clase')} refresh={refresh}/>}
       {page==='planes'&&<VistaPlanes students={students} routines={routines} ejercicios={ejercicios} onNew={()=>setModal('routine')} refresh={refresh}/>}
       {page==='profesores'&&<VistaProfesores profesores={profesores} onNew={()=>setModal('profesor')} refresh={refresh}/>}

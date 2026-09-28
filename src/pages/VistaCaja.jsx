@@ -5,6 +5,7 @@ import { api, queuePush, esErrorDeRed, newOperationId } from '../services/api'
 import { list, put } from '../services/db'
 import { money, today, toDisplay, onEnterNext } from '../utils/helpers.js'
 import { resumenCaja, efectivoCaja, filtrarMovimientos } from '../utils/caja.js'
+import { toCSV, descargarCSV } from '../utils/export.js'
 import { Empty, PanelTitle } from '../components/ui.jsx'
 
 const CATS = {
@@ -139,6 +140,7 @@ export default function VistaCaja({ rol }) {
         <select className="field" style={{ maxWidth: 160 }} aria-label="Categoría" value={categoria} onChange={e => setCategoria(e.target.value)}><option value="">Categoría</option>{[...CATS.ingreso, ...CATS.egreso].map(c => <option key={c}>{c}</option>)}</select>
         <select className="field" style={{ maxWidth: 150 }} aria-label="Método" value={metodo} onChange={e => setMetodo(e.target.value)}><option value="">Método</option>{METODOS.map(m => <option key={m}>{m}</option>)}</select>
         <div className="search-wrap"><input className="field-search" aria-label="Buscar movimiento" placeholder="🔎 Buscar..." value={q} onChange={e => setQ(e.target.value)} /></div>
+        <button className="ghost sm" title="Descargar CSV de movimientos filtrados" onClick={() => descargarCSV(`caja-${desde || 'todos'}-${hasta || ''}.csv`, toCSV(filtrados, [{ key: 'fecha', label: 'Fecha' }, { key: 'tipo', label: 'Tipo' }, { key: 'concepto', label: 'Concepto' }, { key: 'categoria', label: 'Categoría' }, { key: 'monto', label: 'Monto' }, { key: 'metodo', label: 'Método' }]))}>⤓ CSV</button>
       </div>
       <div className="table" style={{ marginTop: 0, overflow: 'hidden' }}>
         <div className="thead gestion"><span>Hora</span><span>Tipo</span><span>Concepto</span><span>Categoría</span><span>Monto</span><span>Método</span></div>

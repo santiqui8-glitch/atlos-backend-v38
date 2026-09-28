@@ -3,6 +3,7 @@ import { api, readTenantQueue, writeTenantQueue, sameQueueContext, newOperationI
 import { tenantGetJSON, tenantSetJSON, pushDeletedId } from '../services/tenant'
 import { list, put, remove } from '../services/db'
 import { money, today, parseFecha, toDisplay, isSameMonth, onEnterNext } from '../utils/helpers.js'
+import { toCSV, descargarCSV } from '../utils/export.js'
 import { estadoMembresia } from '../utils/membresia.js'
 import { Empty } from '../components/ui.jsx'
 
@@ -106,6 +107,7 @@ export default function VistaPlanificacion({students,query,setQuery,stats,paymen
     </div>
     <div className="toolbar">
       <div className="search-wrap"><input className="field-search" aria-label="Buscar alumno" placeholder="🔎 Buscar por nombre, apellido, DNI o teléfono..." value={query} onChange={e=>setQuery(e.target.value)}/></div>
+      <button className="ghost sm" title="Descargar CSV de la lista filtrada" onClick={()=>{ const rows=filtrados.map(s=>{ const em=emDe(s); return {nombre:[s.name,s.apellido].filter(Boolean).join(' '),dni:s.dni||'',telefono:s.phone||'',email:s.mail||s.email||'',plan:em.planNombre||'',estado:em.estado,vencimiento:em.vencimiento||''} }); descargarCSV(`alumnos-${today()}.csv`,toCSV(rows,[{key:'nombre',label:'Nombre'},{key:'dni',label:'DNI'},{key:'telefono',label:'Teléfono'},{key:'email',label:'Email'},{key:'plan',label:'Plan'},{key:'estado',label:'Estado'},{key:'vencimiento',label:'Vencimiento'}])) }}>⤓ CSV</button>
       <select className="field" style={{maxWidth:170}} aria-label="Filtrar por estado" value={fEstado} onChange={e=>setFEstado(e.target.value)}>
         <option value="todos">Todos los estados</option>
         <option value="vigente">Al día</option>
